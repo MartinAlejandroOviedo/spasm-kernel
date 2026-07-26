@@ -27,7 +27,8 @@ VAR_RE = re.compile(
 )
 TYPED_VAR_RE = re.compile(
     r"(var|let)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
-    r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;{}]+)\s*;"
+    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)"
+    r"\s*=\s*([^;{}]+)\s*;"
 )
 ASSIGN_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;{}]+)\s*;")
 IF_HEAD_RE = re.compile(r"if\s*\(([^()]*)\)\s*\{")
@@ -62,10 +63,15 @@ CALL_RE = re.compile(
 )
 FUNCTION_HEAD_RE = re.compile(
     r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)\s*"
-    r"->\s*([A-Za-z_][A-Za-z0-9_]*)\s*\{"
+    r"->\s*([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)"
+    r"\s*\{"
 )
 PARAM_RE = re.compile(
-    r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)\s*$"
+    r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
+    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)\s*$"
+)
+POINTER_TYPE_RE = re.compile(
+    r"^ptr<([A-Za-z_][A-Za-z0-9_]*)>(\?)?$"
 )
 
 
@@ -186,7 +192,7 @@ def extract_functions(source):
         name, params_text, return_type = match.groups()
         if name in names:
             raise CompileError(f"funcion duplicada: {name}")
-        if return_type not in INTEGER_TYPES:
+        if not is_supported_type(return_type):
             raise CompileError(f"tipo de retorno no soportado: {return_type}")
         params = []
         param_names = set()
@@ -198,7 +204,7 @@ def extract_functions(source):
                         f"parametro invalido en funcion {name}: {raw_param.strip()}"
                     )
                 param_name, param_type = param_match.groups()
-                if param_type not in INTEGER_TYPES:
+                if not is_supported_type(param_type):
                     raise CompileError(
                         f"tipo de parametro no soportado: {param_type}"
                     )
@@ -249,6 +255,26 @@ def parse_errno(value):
     return ERRNOS[name]
 
 
+def pointer_type(type_name):
+    return POINTER_TYPE_RE.match(type_name)
+
+
+def is_supported_type(type_name):
+    if type_name in INTEGER_TYPES:
+        return True
+    match = pointer_type(type_name)
+    return bool(match and match.group(1) in INTEGER_TYPES)
+
+
+def is_pointer_type(type_name):
+    return pointer_type(type_name) is not None
+
+
+def is_nullable_pointer(type_name):
+    match = pointer_type(type_name)
+    return bool(match and match.group(2))
+
+
 def parse_operand(value, variables):
     value = value.strip()
     if value.lstrip("-").isdigit():
@@ -270,6 +296,16 @@ def parse_expression(value, variables):
 
 
 def validate_immediate(value, type_name):
+    if is_pointer_type(type_name):
+        if value == 0 and is_nullable_pointer(type_name):
+            return
+        if value == 0:
+            raise CompileError(
+                f"null no es valido para puntero no anulable {type_name}"
+            )
+        raise CompileError(
+            f"una direccion entera no se convierte implicitamente a {type_name}"
+        )
     minimum, maximum = INTEGER_TYPES[type_name]
     if value < minimum or value > maximum:
         raise CompileError(
@@ -278,6 +314,8 @@ def validate_immediate(value, type_name):
 
 
 def validate_expression_type(expression, variable_types, expected_type):
+    if is_pointer_type(expected_type) and len(expression) != 1:
+        raise CompileError("aritmetica de punteros no permitida")
     for operand in expression[::2]:
         kind, value = operand
         if kind == "imm":
@@ -332,11 +370,28 @@ def parse_condition(value, variables):
     if not match:
         raise CompileError(f"condicion no soportada: {value.strip()}")
     left, comparator, right = match.groups()
-    return (
-        parse_operand(left, variables),
-        comparator,
-        parse_operand(right, variables),
+    left_operand = parse_operand(left, variables)
+    right_operand = parse_operand(right, variables)
+    left_type = (
+        variables[left_operand[1]] if left_operand[0] == "var" else None
     )
+    right_type = (
+        variables[right_operand[1]] if right_operand[0] == "var" else None
+    )
+    condition_type = left_type or right_type or "i64"
+    if left_type and right_type and left_type != right_type:
+        raise CompileError(
+            f"comparacion entre tipos incompatibles: {left_type} y {right_type}"
+        )
+    if is_pointer_type(condition_type):
+        if comparator not in ("==", "!="):
+            raise CompileError(
+                "punteros solo admiten comparaciones == y !="
+            )
+        for operand in (left_operand, right_operand):
+            if operand[0] == "imm":
+                validate_immediate(operand[1], condition_type)
+    return (left_operand, comparator, right_operand)
 
 
 def parse_statements(
@@ -441,12 +496,13 @@ def parse_statements(
                 if nested:
                     raise CompileError("recurso dentro de if aun no soportado")
                 resource_name, size_text, errno_text = values
-                if resource_name in resources:
+                if resource_name in resources or resource_name in variables:
                     raise CompileError(f"recurso duplicado: {resource_name}")
                 size = int(size_text)
                 if size < 1 or size > 1024 * 1024:
                     raise CompileError(f"tamano kalloc fuera de rango: {size}")
                 resources[resource_name] = "live"
+                variables[resource_name] = "ptr<u8>"
                 statements.append(
                     ("resource", resource_name, size, parse_errno(errno_text))
                 )
@@ -464,10 +520,11 @@ def parse_statements(
                 statements.append((statement_kind, resource_name))
                 if statement_kind == "free":
                     resources[resource_name] = "freed"
+                    variables.pop(resource_name, None)
             elif statement_kind in ("typed_var", "var"):
                 if statement_kind == "typed_var":
                     _declaration, variable_name, type_name, expression_text = values
-                    if type_name not in INTEGER_TYPES:
+                    if not is_supported_type(type_name):
                         raise CompileError(f"tipo no soportado: {type_name}")
                 else:
                     _declaration, variable_name, expression_text = values
@@ -485,6 +542,10 @@ def parse_statements(
                 variable_name, expression_text = values
                 if variable_name not in variables:
                     raise CompileError(f"variable no declarada: {variable_name}")
+                if variable_name in resources:
+                    raise CompileError(
+                        f"no se puede reasignar el recurso propietario: {variable_name}"
+                    )
                 statements.append(
                     (
                         "assign",

@@ -104,6 +104,72 @@ expect_failure incompatible_argument_type \
 	"$target" "$test_root/wrong_type.spasm" \
 	--out-dir "$test_root/wrong_type"
 
+printf '%s\n' \
+	'module "nullable"' \
+	'license "GPL"' \
+	'on load { var opcional: ptr<u8>? = 0; return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/nullable.spasm"
+expect_success nullable_pointer_accepts_null \
+	"$target" "$test_root/nullable.spasm" \
+	--out-dir "$test_root/nullable"
+
+printf '%s\n' \
+	'module "nonnull"' \
+	'license "GPL"' \
+	'on load { var obligatorio: ptr<u8> = 0; return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/nonnull.spasm"
+expect_failure nonnullable_pointer_rejects_null \
+	"$target" "$test_root/nonnull.spasm" \
+	--out-dir "$test_root/nonnull"
+
+printf '%s\n' \
+	'module "pointer_math"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  var desplazado: ptr<u8> = buffer + 1;' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/pointer_math.spasm"
+expect_failure pointer_arithmetic_rejected \
+	"$target" "$test_root/pointer_math.spasm" \
+	--out-dir "$test_root/pointer_math"
+
+printf '%s\n' \
+	'module "pointer_order"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  var alias: ptr<u8> = buffer;' \
+	'  if (alias < buffer) { alias = buffer; }' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/pointer_order.spasm"
+expect_failure pointer_order_rejected \
+	"$target" "$test_root/pointer_order.spasm" \
+	--out-dir "$test_root/pointer_order"
+
+printf '%s\n' \
+	'module "owner_assign"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  buffer = buffer;' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/owner_assign.spasm"
+expect_failure owning_resource_reassignment_rejected \
+	"$target" "$test_root/owner_assign.spasm" \
+	--out-dir "$test_root/owner_assign"
+
 echo "1..$((pass + fail))"
 echo "# pass=$pass fail=$fail"
 test "$fail" -eq 0

@@ -210,3 +210,31 @@ las funciones son puras, contienen exactamente un `return`, no llaman la API
 Linux y realizan la aritmética en registros de 64 bits; el truncado y la
 comprobación de overflow para tipos menores quedan para la siguiente revisión
 del sistema de tipos.
+
+## Punteros tipados
+
+La primera base de punteros distingue nulabilidad y propiedad:
+
+```text
+fn conservar(p: ptr<u8>) -> ptr<u8> {
+	return p;
+}
+
+recurso buffer = kalloc<u8>(256) else return -ENOMEM
+var alias: ptr<u8> = conservar(buffer);
+var opcional: ptr<u8>? = 0;
+liberar buffer
+```
+
+- `ptr<T>` nunca acepta `0`;
+- `ptr<T>?` puede contener `0`;
+- no existen conversiones implícitas entre enteros y direcciones;
+- `ptr<u8>` y `ptr<u16>` son tipos incompatibles;
+- no se permite aritmética ni comparación de orden entre punteros;
+- solamente el nombre declarado con `recurso` posee la reserva y puede
+  liberarla o reasignar su estado;
+- un alias no transfiere propiedad.
+
+SP-005 todavía no habilita desreferencia general. El acceso actual permanece
+limitado a operaciones controladas por el backend; tamaños, alineación y
+préstamos deberán modelarse antes de exponer lectura o escritura arbitraria.

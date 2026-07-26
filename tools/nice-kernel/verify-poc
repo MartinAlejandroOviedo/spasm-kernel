@@ -24,6 +24,7 @@ fi
 required_signals=(
 	"[spasm-init] Nice_Kernel_Machine_and_User_Care"
 	"spasm: Nice Kernel: SpASM nativo activo en Ring 0"
+	"spasm: Puntero tipado SpASM correcto"
 	"spasm: Condicional SpASM nativo correcto"
 	"spasm: Bucle SpASM nativo correcto"
 	"spasm: Division y modulo SpASM correctos"

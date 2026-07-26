@@ -11,11 +11,19 @@ fn multiplicar_u32(a: u32, b: u32) -> u32 {
 	return a * b;
 }
 
+fn identidad_buffer(buffer: ptr<u8>) -> ptr<u8> {
+	return buffer;
+}
+
 on load {
 	klog("Nice Kernel: SpASM nativo activo en Ring 0")
 	recurso buffer = kalloc<u8>(256) else return -ENOMEM
 	usar buffer
 	klog("Memoria nativa SpASM asignada y utilizada")
+	var alias: ptr<u8> = identidad_buffer(buffer);
+	if (alias == buffer) {
+		klog("Puntero tipado SpASM correcto")
+	}
 	liberar buffer
 	klog("Memoria nativa SpASM liberada")
 	var estado = 40;
