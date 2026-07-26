@@ -1,0 +1,64 @@
+#!/bin/bash
+set -euo pipefail
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
+target="$kernel_src/tools/spasm-kernel/spasm-target-nice-kernel-x86_64"
+sample="$kernel_src/samples/spasm/hello_kmod.spasm"
+test_root=$(mktemp -d)
+trap 'rm -rf -- "$test_root"' EXIT
+
+pass=0
+fail=0
+
+expect_success()
+{
+	local name=$1
+	shift
+	if "$@" >"$test_root/$name.out" 2>"$test_root/$name.err"; then
+		echo "ok - $name"
+		pass=$((pass + 1))
+	else
+		echo "not ok - $name"
+		fail=$((fail + 1))
+	fi
+}
+
+expect_failure()
+{
+	local name=$1
+	shift
+	if "$@" >"$test_root/$name.out" 2>"$test_root/$name.err"; then
+		echo "not ok - $name"
+		fail=$((fail + 1))
+	else
+		echo "ok - $name"
+		pass=$((pass + 1))
+	fi
+}
+
+expect_success valid_module \
+	"$target" "$sample" --out-dir "$test_root/valid"
+test -s "$test_root/valid/spasm_hello_native.S"
+test -s "$test_root/valid/Makefile"
+if find "$test_root/valid" -type f -name '*.c' | grep -q .; then
+	echo "not ok - native_output_contains_no_c"
+	fail=$((fail + 1))
+else
+	echo "ok - native_output_contains_no_c"
+	pass=$((pass + 1))
+fi
+
+expect_failure missing_source \
+	"$target" "$test_root/missing.spasm" --out-dir "$test_root/missing"
+expect_failure invalid_extension \
+	"$target" "$sample.txt" --out-dir "$test_root/extension"
+
+printf 'module "broken"\\nlicense "GPL"\\non load {\\n  desconocido\\n}\\n' \
+	>"$test_root/invalid.spasm"
+expect_failure invalid_statement \
+	"$target" "$test_root/invalid.spasm" --out-dir "$test_root/invalid"
+
+echo "1..$((pass + fail))"
+echo "# pass=$pass fail=$fail"
+test "$fail" -eq 0

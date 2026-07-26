@@ -52,6 +52,14 @@ tools/nice-kernel/verify-poc
 La procedencia, versiones, hashes y criterio de aprobación están registrados
 en `NICE-KERNEL-PROVENANCE.md`.
 
+El backend nativo se consume mediante el contrato estable
+`nice-kernel-x86_64`, documentado en
+`docs/nice-kernel/spasm-target-v1.md`. Sus pruebas rápidas se ejecutan con:
+
+```sh
+tools/testing/selftests/nice-kernel/run_backend_tests
+```
+
 El directorio de construcción predeterminado es:
 
 ```text

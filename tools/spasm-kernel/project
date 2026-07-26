@@ -11,6 +11,7 @@ initramfs="$kernel_build/spasm-initramfs.cpio.gz"
 bzimage="$kernel_build/arch/x86/boot/bzImage"
 module_build="$kernel_build/spasm-modules/hello"
 spasm_module="$module_build/spasm_hello.ko"
+spasm_kernel_target="$kernel_src/tools/spasm-kernel/spasm-target-nice-kernel-x86_64"
 
 die()
 {
@@ -78,8 +79,9 @@ build_module()
 {
 	[ -f "$kernel_build/.config" ] || configure_kernel
 	mkdir -p "$module_build"
-	python3 "$kernel_src/tools/spasm-kernel/spasm-kmod-native.py" \
+	"$spasm_kernel_target" \
 		"$kernel_src/samples/spasm/hello_kmod.spasm" \
+		--target nice-kernel-x86_64 \
 		--out-dir "$module_build"
 	make -C "$kernel_src" O="$kernel_build" ARCH=x86_64 \
 		M="$module_build" modules
