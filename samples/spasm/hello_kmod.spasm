@@ -1,0 +1,43 @@
+module "spasm_hello"
+license "GPL"
+author "Martin Alejandro Oviedo"
+description "Primer modulo nativo SpASM del proyecto Nice Kernel"
+
+on load {
+	klog("Nice Kernel: SpASM nativo activo en Ring 0")
+	recurso buffer = kalloc<u8>(256) else return -ENOMEM
+	usar buffer
+	klog("Memoria nativa SpASM asignada y utilizada")
+	liberar buffer
+	klog("Memoria nativa SpASM liberada")
+	var estado = 40;
+	estado = estado + 2;
+	if (estado == 42) {
+		klog("Condicional SpASM nativo correcto")
+	} else {
+		klog("Condicional SpASM nativo incorrecto")
+	}
+	var iteracion = 0;
+	var potencia = 1;
+	while (iteracion < 5) {
+		potencia = potencia * 2;
+		iteracion = iteracion + 1;
+	}
+	if (potencia == 32) {
+		klog("Bucle SpASM nativo correcto")
+	} else {
+		klog("Bucle SpASM nativo incorrecto")
+	}
+	var cociente = 84 / 2;
+	var resto = 85 % 2;
+	if (cociente == 42) {
+		if (resto == 1) {
+			klog("Division y modulo SpASM correctos")
+		}
+	}
+	return 0
+}
+
+on unload {
+	klog("SpASM nativo descargado")
+}
