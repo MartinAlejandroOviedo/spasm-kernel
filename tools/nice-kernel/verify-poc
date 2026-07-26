@@ -27,6 +27,7 @@ required_signals=(
 	"spasm: Condicional SpASM nativo correcto"
 	"spasm: Bucle SpASM nativo correcto"
 	"spasm: Division y modulo SpASM correctos"
+	"spasm: Funciones y tipos SpASM correctos"
 	"[spasm-init] Modulo SpASM: CARGADO"
 	"[spasm-init] Modulo SpASM: DESCARGADO"
 	"[spasm-init] RESULTADO: OK"

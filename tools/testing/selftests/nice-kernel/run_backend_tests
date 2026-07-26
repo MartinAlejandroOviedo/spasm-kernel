@@ -59,6 +59,51 @@ printf 'module "broken"\\nlicense "GPL"\\non load {\\n  desconocido\\n}\\n' \
 expect_failure invalid_statement \
 	"$target" "$test_root/invalid.spasm" --out-dir "$test_root/invalid"
 
+printf '%s\n' \
+	'module "range"' \
+	'license "GPL"' \
+	'on load { var valor: u8 = 256; return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/range.spasm"
+expect_failure integer_out_of_range \
+	"$target" "$test_root/range.spasm" --out-dir "$test_root/range"
+
+printf '%s\n' \
+	'module "unknown_type"' \
+	'license "GPL"' \
+	'on load { var valor: word = 1; return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/unknown_type.spasm"
+expect_failure unknown_integer_type \
+	"$target" "$test_root/unknown_type.spasm" \
+	--out-dir "$test_root/unknown_type"
+
+printf '%s\n' \
+	'module "wrong_args"' \
+	'license "GPL"' \
+	'fn sumar(a: i64, b: i64) -> i64 { return a + b; }' \
+	'on load { var valor: i64 = sumar(1); return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/wrong_args.spasm"
+expect_failure wrong_argument_count \
+	"$target" "$test_root/wrong_args.spasm" \
+	--out-dir "$test_root/wrong_args"
+
+printf '%s\n' \
+	'module "wrong_type"' \
+	'license "GPL"' \
+	'fn identidad(a: u16) -> u16 { return a; }' \
+	'on load {' \
+	'  var pequeno: u8 = 1;' \
+	'  var valor: u16 = identidad(pequeno);' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/wrong_type.spasm"
+expect_failure incompatible_argument_type \
+	"$target" "$test_root/wrong_type.spasm" \
+	--out-dir "$test_root/wrong_type"
+
 echo "1..$((pass + fail))"
 echo "# pass=$pass fail=$fail"
 test "$fail" -eq 0

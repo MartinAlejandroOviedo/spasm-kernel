@@ -183,3 +183,30 @@ bucle tiene un presupuesto de 100000 iteraciones: si se agota, retorna
 `-ELOOP`. Ambos caminos de error liberan primero todos los recursos vivos.
 Las declaraciones, recursos y retornos dentro de una rama todavía están fuera
 de este primer subconjunto.
+
+## Funciones y tipos enteros
+
+El target `nice-kernel-x86_64` admite funciones internas puras con hasta seis
+argumentos y retorno entero:
+
+```text
+fn sumar(a: i64, b: i64) -> i64 {
+	return a + b;
+}
+
+var resultado: i64 = sumar(40, 2);
+```
+
+Tipos v1:
+
+```text
+u8 i8 u16 i16 u32 i32 u64 i64 usize isize bool
+```
+
+Las firmas, cantidad de argumentos, compatibilidad exacta de tipos y constantes
+fuera de rango se rechazan durante la compilación. Los argumentos siguen la ABI
+System V x86_64 en registros y el resultado se devuelve en `rax`. En esta fase
+las funciones son puras, contienen exactamente un `return`, no llaman la API
+Linux y realizan la aritmética en registros de 64 bits; el truncado y la
+comprobación de overflow para tipos menores quedan para la siguiente revisión
+del sistema de tipos.

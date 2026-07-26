@@ -3,6 +3,14 @@ license "GPL"
 author "Martin Alejandro Oviedo"
 description "Primer modulo nativo SpASM del proyecto Nice Kernel"
 
+fn sumar(a: i64, b: i64) -> i64 {
+	return a + b;
+}
+
+fn multiplicar_u32(a: u32, b: u32) -> u32 {
+	return a * b;
+}
+
 on load {
 	klog("Nice Kernel: SpASM nativo activo en Ring 0")
 	recurso buffer = kalloc<u8>(256) else return -ENOMEM
@@ -33,6 +41,13 @@ on load {
 	if (cociente == 42) {
 		if (resto == 1) {
 			klog("Division y modulo SpASM correctos")
+		}
+	}
+	var resultado: i64 = sumar(40, 2);
+	var producto: u32 = multiplicar_u32(6, 7);
+	if (resultado == 42) {
+		if (producto == 42) {
+			klog("Funciones y tipos SpASM correctos")
 		}
 	}
 	return 0
