@@ -170,6 +170,67 @@ expect_failure owning_resource_reassignment_rejected \
 	"$target" "$test_root/owner_assign.spasm" \
 	--out-dir "$test_root/owner_assign"
 
+printf '%s\n' \
+	'module "memory_bounds"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  guardar<u32>(buffer, 8, 1);' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/memory_bounds.spasm"
+expect_failure memory_out_of_bounds_rejected \
+	"$target" "$test_root/memory_bounds.spasm" \
+	--out-dir "$test_root/memory_bounds"
+
+printf '%s\n' \
+	'module "memory_alignment"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  guardar<u32>(buffer, 2, 1);' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/memory_alignment.spasm"
+expect_failure unaligned_memory_access_rejected \
+	"$target" "$test_root/memory_alignment.spasm" \
+	--out-dir "$test_root/memory_alignment"
+
+printf '%s\n' \
+	'module "memory_lifetime"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  liberar buffer' \
+	'  var valor: u8 = cargar<u8>(buffer, 0);' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/memory_lifetime.spasm"
+expect_failure access_after_free_rejected \
+	"$target" "$test_root/memory_lifetime.spasm" \
+	--out-dir "$test_root/memory_lifetime"
+
+printf '%s\n' \
+	'module "memory_value_type"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  var valor: u16 = 1;' \
+	'  guardar<u32>(buffer, 0, valor);' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/memory_value_type.spasm"
+expect_failure stored_value_type_mismatch_rejected \
+	"$target" "$test_root/memory_value_type.spasm" \
+	--out-dir "$test_root/memory_value_type"
+
 echo "1..$((pass + fail))"
 echo "# pass=$pass fail=$fail"
 test "$fail" -eq 0

@@ -18,6 +18,11 @@ fn identidad_buffer(buffer: ptr<u8>) -> ptr<u8> {
 on load {
 	klog("Nice Kernel: SpASM nativo activo en Ring 0")
 	recurso buffer = kalloc<u8>(256) else return -ENOMEM
+	guardar<u32>(buffer, 4, 424242);
+	var lectura: u32 = cargar<u32>(buffer, 4);
+	if (lectura == 424242) {
+		klog("Memoria tipada SpASM comprobada")
+	}
 	usar buffer
 	klog("Memoria nativa SpASM asignada y utilizada")
 	var alias: ptr<u8> = identidad_buffer(buffer);

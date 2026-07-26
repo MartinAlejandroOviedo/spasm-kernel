@@ -22,6 +22,11 @@ RESOURCE_RE = re.compile(
 )
 USE_RE = re.compile(r"usar\s+([A-Za-z_][A-Za-z0-9_]*)")
 FREE_RE = re.compile(r"liberar\s+([A-Za-z_][A-Za-z0-9_]*)")
+STORE_RE = re.compile(
+    r"guardar<([A-Za-z_][A-Za-z0-9_]*)>\(\s*"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([0-9]+)\s*,\s*"
+    r"(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*)\s*\)\s*;?"
+)
 VAR_RE = re.compile(
     r"(var|let)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;{}]+)\s*;"
 )
@@ -73,6 +78,23 @@ PARAM_RE = re.compile(
 POINTER_TYPE_RE = re.compile(
     r"^ptr<([A-Za-z_][A-Za-z0-9_]*)>(\?)?$"
 )
+LOAD_RE = re.compile(
+    r"^\s*cargar<([A-Za-z_][A-Za-z0-9_]*)>\(\s*"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([0-9]+)\s*\)\s*$"
+)
+TYPE_WIDTHS = {
+    "u8": 1,
+    "i8": 1,
+    "bool": 1,
+    "u16": 2,
+    "i16": 2,
+    "u32": 4,
+    "i32": 4,
+    "u64": 8,
+    "i64": 8,
+    "usize": 8,
+    "isize": 8,
+}
 
 
 def decode_string(value):
@@ -275,6 +297,27 @@ def is_nullable_pointer(type_name):
     return bool(match and match.group(2))
 
 
+def validate_memory_access(type_name, resource_name, offset, resources):
+    if type_name not in TYPE_WIDTHS:
+        raise CompileError(f"tipo de acceso a memoria no soportado: {type_name}")
+    resource = resources.get(resource_name)
+    if resource is None:
+        raise CompileError(f"recurso no declarado: {resource_name}")
+    state, capacity = resource
+    if state != "live":
+        raise CompileError(f"recurso ya liberado: {resource_name}")
+    width = TYPE_WIDTHS[type_name]
+    if offset % width:
+        raise CompileError(
+            f"acceso {type_name} desalineado en offset {offset}"
+        )
+    if offset + width > capacity:
+        raise CompileError(
+            f"acceso fuera de rango: {resource_name}[{offset}:{offset + width}] "
+            f"excede {capacity} bytes"
+        )
+
+
 def parse_operand(value, variables):
     value = value.strip()
     if value.lstrip("-").isdigit():
@@ -329,6 +372,14 @@ def validate_expression_type(expression, variable_types, expected_type):
 
 
 def parse_value_expression(value, variables, functions, expected_type):
+    load_match = LOAD_RE.match(value)
+    if load_match:
+        load_type, resource_name, offset_text = load_match.groups()
+        if load_type != expected_type:
+            raise CompileError(
+                f"cargar<{load_type}> no se puede asignar a {expected_type}"
+            )
+        return ("load", resource_name, int(offset_text), load_type)
     call_match = CALL_RE.match(value)
     if not call_match:
         expression = parse_expression(value, variables)
@@ -391,6 +442,10 @@ def parse_condition(value, variables):
         for operand in (left_operand, right_operand):
             if operand[0] == "imm":
                 validate_immediate(operand[1], condition_type)
+    else:
+        for operand in (left_operand, right_operand):
+            if operand[0] == "imm":
+                validate_immediate(operand[1], condition_type)
     return (left_operand, comparator, right_operand)
 
 
@@ -412,6 +467,7 @@ def parse_statements(
         ("resource", RESOURCE_RE),
         ("use", USE_RE),
         ("free", FREE_RE),
+        ("store", STORE_RE),
         ("return", RETURN_RE),
         ("typed_var", TYPED_VAR_RE),
         ("var", VAR_RE),
@@ -501,7 +557,7 @@ def parse_statements(
                 size = int(size_text)
                 if size < 1 or size > 1024 * 1024:
                     raise CompileError(f"tamano kalloc fuera de rango: {size}")
-                resources[resource_name] = "live"
+                resources[resource_name] = ("live", size)
                 variables[resource_name] = "ptr<u8>"
                 statements.append(
                     ("resource", resource_name, size, parse_errno(errno_text))
@@ -512,15 +568,31 @@ def parse_statements(
                         f"{statement_kind} dentro de if aun no soportado"
                     )
                 resource_name = values[0]
-                state = resources.get(resource_name)
-                if state is None:
+                resource = resources.get(resource_name)
+                if resource is None:
                     raise CompileError(f"recurso no declarado: {resource_name}")
-                if state != "live":
+                if resource[0] != "live":
                     raise CompileError(f"recurso ya liberado: {resource_name}")
                 statements.append((statement_kind, resource_name))
                 if statement_kind == "free":
-                    resources[resource_name] = "freed"
+                    resources[resource_name] = ("freed", resource[1])
                     variables.pop(resource_name, None)
+            elif statement_kind == "store":
+                type_name, resource_name, offset_text, value_text = values
+                validate_memory_access(
+                    type_name, resource_name, int(offset_text), resources
+                )
+                value = parse_operand(value_text, variables)
+                if value[0] == "imm":
+                    validate_immediate(value[1], type_name)
+                elif variables[value[1]] != type_name:
+                    raise CompileError(
+                        f"guardar<{type_name}> recibio "
+                        f"{variables[value[1]]}"
+                    )
+                statements.append(
+                    ("store", resource_name, int(offset_text), type_name, value)
+                )
             elif statement_kind in ("typed_var", "var"):
                 if statement_kind == "typed_var":
                     _declaration, variable_name, type_name, expression_text = values
@@ -536,6 +608,10 @@ def parse_statements(
                 expression = parse_value_expression(
                     expression_text, variables, functions, type_name
                 )
+                if expression[0] == "load":
+                    validate_memory_access(
+                        expression[3], expression[1], expression[2], resources
+                    )
                 variables[variable_name] = type_name
                 statements.append(("var", variable_name, expression, type_name))
             elif statement_kind == "assign":
@@ -559,6 +635,11 @@ def parse_statements(
                         variables[variable_name],
                     )
                 )
+                expression = statements[-1][2]
+                if expression[0] == "load":
+                    validate_memory_access(
+                        expression[3], expression[1], expression[2], resources
+                    )
             else:
                 if nested:
                     raise CompileError("return dentro de if aun no soportado")
@@ -674,7 +755,49 @@ def emit_load_operand(lines, operand, slots, register):
         lines.append(f"\tmovq {slots[value]}(%rbp), %{register}")
 
 
+def emit_memory_load(lines, resource_name, offset, type_name, slots):
+    lines.append(f"\tmovq {slots[resource_name]}(%rbp), %rcx")
+    instruction = {
+        "u8": "movzbq",
+        "bool": "movzbq",
+        "i8": "movsbq",
+        "u16": "movzwq",
+        "i16": "movswq",
+        "u32": "movl",
+        "i32": "movslq",
+        "u64": "movq",
+        "i64": "movq",
+        "usize": "movq",
+        "isize": "movq",
+    }[type_name]
+    destination = "%eax" if type_name == "u32" else "%rax"
+    lines.append(f"\t{instruction} {offset}(%rcx), {destination}")
+
+
+def emit_memory_store(lines, resource_name, offset, type_name, value, slots):
+    emit_load_operand(lines, value, slots, "rax")
+    lines.append(f"\tmovq {slots[resource_name]}(%rbp), %rcx")
+    instruction, source = {
+        "u8": ("movb", "%al"),
+        "i8": ("movb", "%al"),
+        "bool": ("movb", "%al"),
+        "u16": ("movw", "%ax"),
+        "i16": ("movw", "%ax"),
+        "u32": ("movl", "%eax"),
+        "i32": ("movl", "%eax"),
+        "u64": ("movq", "%rax"),
+        "i64": ("movq", "%rax"),
+        "usize": ("movq", "%rax"),
+        "isize": ("movq", "%rax"),
+    }[type_name]
+    lines.append(f"\t{instruction} {source}, {offset}(%rcx)")
+
+
 def emit_expression(lines, expression, slots, arithmetic_error_label):
+    if expression[0] == "load":
+        _kind, resource_name, offset, type_name = expression
+        emit_memory_load(lines, resource_name, offset, type_name, slots)
+        return
     if expression[0] == "call":
         _kind, function_name, arguments, _return_type = expression
         for operand, register in zip(arguments, ARG_REGISTERS):
@@ -846,6 +969,11 @@ def emit_function(lines, name, statements, prefix):
                 ]
             )
             active.remove(resource_name)
+        elif statement_kind == "store":
+            resource_name, offset, type_name, value = statement[1:]
+            emit_memory_store(
+                lines, resource_name, offset, type_name, value, slots
+            )
         elif statement_kind in ("var", "assign"):
             variable_name, expression = statement[1:3]
             emit_expression(lines, expression, slots, arithmetic_error_label)

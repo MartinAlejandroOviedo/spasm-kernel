@@ -238,3 +238,27 @@ liberar buffer
 SP-005 todavía no habilita desreferencia general. El acceso actual permanece
 limitado a operaciones controladas por el backend; tamaños, alineación y
 préstamos deberán modelarse antes de exponer lectura o escritura arbitraria.
+
+## Acceso comprobado a memoria
+
+Las reservas con capacidad conocida admiten accesos tipados con offset
+constante:
+
+```text
+recurso buffer = kalloc<u8>(256) else return -ENOMEM
+guardar<u32>(buffer, 4, 424242);
+var lectura: u32 = cargar<u32>(buffer, 4);
+```
+
+Antes de generar una instrucción de memoria, el compilador comprueba:
+
+- que el recurso existe y continúa vivo;
+- que el tipo es entero y tiene un ancho conocido;
+- que el offset respeta la alineación natural del tipo;
+- que `offset + sizeof(T)` no excede la capacidad;
+- que el valor almacenado tiene exactamente el tipo solicitado.
+
+El backend selecciona cargas con extensión de signo o cero según `i8/u8`,
+`i16/u16` e `i32/u32`; los tipos de 64 bits se transfieren completos. No se
+aceptan offsets dinámicos ni accesos mediante alias en esta primera versión,
+por lo que los límites siempre son demostrables durante la compilación.
