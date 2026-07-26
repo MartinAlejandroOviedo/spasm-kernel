@@ -60,6 +60,10 @@ El backend nativo se consume mediante el contrato estable
 tools/testing/selftests/nice-kernel/run_backend_tests
 ```
 
+El comando `project module` registra el target con `SPASMC_TARGET_PATH` y llama
+al dispatcher propio `/home/martin/Documentos/SpASM/tools/spasmc.py`. No existe
+una ruta alternativa que genere C.
+
 El directorio de construcción predeterminado es:
 
 ```text

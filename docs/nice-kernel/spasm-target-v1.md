@@ -12,17 +12,26 @@ El identificador público del target es:
 nice-kernel-x86_64
 ```
 
-## Entrada ejecutable
+## Entrada oficial
 
-Mientras el dispatcher externo `spasmc.py` incorpora soporte para extensiones,
-la entrada canónica dentro de Nice Kernel es:
+Nice Kernel registra el directorio del target mediante `SPASMC_TARGET_PATH` y
+compila siempre a través del dispatcher oficial:
 
 ```sh
-tools/spasm-kernel/spasm-target-nice-kernel-x86_64 \
-    SOURCE.spasm --out-dir BUILD_DIR
+SPASMC_TARGET_PATH=tools/spasm-kernel \
+    /home/martin/Documentos/SpASM/tools/spasmc.py \
+    SOURCE.spasm \
+    --target nice-kernel-x86_64 \
+    --out-dir BUILD_DIR
 ```
 
-Opciones:
+El dispatcher descubre esta entrada ejecutable:
+
+```text
+tools/spasm-kernel/spasm-target-nice-kernel-x86_64
+```
+
+Opciones del target:
 
 - `SOURCE.spasm`: fuente obligatorio;
 - `--out-dir DIR`: directorio obligatorio para artefactos generados;
@@ -57,5 +66,6 @@ y árbol del kernel usados para producir el objeto y el módulo `.ko`.
 - backend provisional:
   `tools/spasm-kernel/spasm-kmod-native.py`.
 
-Este contrato puede permanecer estable cuando el parser y el análisis semántico
-pasen al frontend oficial de SpASM.
+Este contrato permanece estable cuando el parser y el análisis semántico pasen
+al frontend compartido de SpASM. Un target desconocido o no registrado produce
+un error explícito; nunca se utiliza el generador C como fallback.
