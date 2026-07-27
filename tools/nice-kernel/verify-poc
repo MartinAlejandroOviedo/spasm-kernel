@@ -26,6 +26,7 @@ required_signals=(
 	"spasm: Nice Kernel: SpASM nativo activo en Ring 0"
 	"spasm: Puntero tipado SpASM correcto"
 	"spasm: Memoria tipada SpASM comprobada"
+	"spasm: Indice dinamico SpASM comprobado"
 	"spasm: Condicional SpASM nativo correcto"
 	"spasm: Bucle SpASM nativo correcto"
 	"spasm: Division y modulo SpASM correctos"

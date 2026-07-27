@@ -24,7 +24,8 @@ USE_RE = re.compile(r"usar\s+([A-Za-z_][A-Za-z0-9_]*)")
 FREE_RE = re.compile(r"liberar\s+([A-Za-z_][A-Za-z0-9_]*)")
 STORE_RE = re.compile(
     r"guardar<([A-Za-z_][A-Za-z0-9_]*)>\(\s*"
-    r"([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([0-9]+)\s*,\s*"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*,\s*"
+    r"([0-9]+|[A-Za-z_][A-Za-z0-9_]*)\s*,\s*"
     r"(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*)\s*\)\s*;?"
 )
 VAR_RE = re.compile(
@@ -80,7 +81,8 @@ POINTER_TYPE_RE = re.compile(
 )
 LOAD_RE = re.compile(
     r"^\s*cargar<([A-Za-z_][A-Za-z0-9_]*)>\(\s*"
-    r"([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([0-9]+)\s*\)\s*$"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*,\s*"
+    r"([0-9]+|[A-Za-z_][A-Za-z0-9_]*)\s*\)\s*$"
 )
 TYPE_WIDTHS = {
     "u8": 1,
@@ -297,7 +299,9 @@ def is_nullable_pointer(type_name):
     return bool(match and match.group(2))
 
 
-def validate_memory_access(type_name, resource_name, offset, resources):
+def validate_memory_access(
+    type_name, resource_name, offset_text, resources, variables
+):
     if type_name not in TYPE_WIDTHS:
         raise CompileError(f"tipo de acceso a memoria no soportado: {type_name}")
     resource = resources.get(resource_name)
@@ -307,15 +311,26 @@ def validate_memory_access(type_name, resource_name, offset, resources):
     if state != "live":
         raise CompileError(f"recurso ya liberado: {resource_name}")
     width = TYPE_WIDTHS[type_name]
-    if offset % width:
+    offset = parse_operand(offset_text, variables)
+    if offset[0] == "var":
+        if variables[offset[1]] != "usize":
+            raise CompileError(
+                f"offset dinamico {offset[1]} debe ser usize, "
+                f"no {variables[offset[1]]}"
+            )
+        return offset
+    offset_value = offset[1]
+    if offset_value % width:
         raise CompileError(
-            f"acceso {type_name} desalineado en offset {offset}"
+            f"acceso {type_name} desalineado en offset {offset_value}"
         )
-    if offset + width > capacity:
+    if offset_value + width > capacity:
         raise CompileError(
-            f"acceso fuera de rango: {resource_name}[{offset}:{offset + width}] "
+            f"acceso fuera de rango: "
+            f"{resource_name}[{offset_value}:{offset_value + width}] "
             f"excede {capacity} bytes"
         )
+    return offset
 
 
 def parse_operand(value, variables):
@@ -379,7 +394,7 @@ def parse_value_expression(value, variables, functions, expected_type):
             raise CompileError(
                 f"cargar<{load_type}> no se puede asignar a {expected_type}"
             )
-        return ("load", resource_name, int(offset_text), load_type)
+        return ("load", resource_name, offset_text, load_type)
     call_match = CALL_RE.match(value)
     if not call_match:
         expression = parse_expression(value, variables)
@@ -579,8 +594,12 @@ def parse_statements(
                     variables.pop(resource_name, None)
             elif statement_kind == "store":
                 type_name, resource_name, offset_text, value_text = values
-                validate_memory_access(
-                    type_name, resource_name, int(offset_text), resources
+                offset = validate_memory_access(
+                    type_name,
+                    resource_name,
+                    offset_text,
+                    resources,
+                    variables,
                 )
                 value = parse_operand(value_text, variables)
                 if value[0] == "imm":
@@ -591,7 +610,14 @@ def parse_statements(
                         f"{variables[value[1]]}"
                     )
                 statements.append(
-                    ("store", resource_name, int(offset_text), type_name, value)
+                    (
+                        "store",
+                        resource_name,
+                        offset,
+                        type_name,
+                        value,
+                        resources[resource_name][1],
+                    )
                 )
             elif statement_kind in ("typed_var", "var"):
                 if statement_kind == "typed_var":
@@ -609,8 +635,19 @@ def parse_statements(
                     expression_text, variables, functions, type_name
                 )
                 if expression[0] == "load":
-                    validate_memory_access(
-                        expression[3], expression[1], expression[2], resources
+                    offset = validate_memory_access(
+                        expression[3],
+                        expression[1],
+                        expression[2],
+                        resources,
+                        variables,
+                    )
+                    expression = (
+                        expression[0],
+                        expression[1],
+                        offset,
+                        expression[3],
+                        resources[expression[1]][1],
                     )
                 variables[variable_name] = type_name
                 statements.append(("var", variable_name, expression, type_name))
@@ -637,9 +674,23 @@ def parse_statements(
                 )
                 expression = statements[-1][2]
                 if expression[0] == "load":
-                    validate_memory_access(
-                        expression[3], expression[1], expression[2], resources
+                    offset = validate_memory_access(
+                        expression[3],
+                        expression[1],
+                        expression[2],
+                        resources,
+                        variables,
                     )
+                    replacement = (
+                        expression[0],
+                        expression[1],
+                        offset,
+                        expression[3],
+                        resources[expression[1]][1],
+                    )
+                    statement = list(statements[-1])
+                    statement[2] = replacement
+                    statements[-1] = tuple(statement)
             else:
                 if nested:
                     raise CompileError("return dentro de if aun no soportado")
@@ -720,6 +771,27 @@ def has_division(statements):
     return False
 
 
+def has_dynamic_memory_access(statements):
+    for statement in statements:
+        if statement[0] == "store" and statement[2][0] == "var":
+            return True
+        if statement[0] in ("var", "assign"):
+            expression = statement[2]
+            if (
+                expression[0] == "load"
+                and expression[2][0] == "var"
+            ):
+                return True
+        if statement[0] == "if":
+            if has_dynamic_memory_access(
+                statement[2]
+            ) or has_dynamic_memory_access(statement[3]):
+                return True
+        if statement[0] == "while" and has_dynamic_memory_access(statement[3]):
+            return True
+    return False
+
+
 def emit_cleanup(lines, active, slots):
     for resource_name in reversed(active):
         offset = slots[resource_name]
@@ -755,8 +827,55 @@ def emit_load_operand(lines, operand, slots, register):
         lines.append(f"\tmovq {slots[value]}(%rbp), %{register}")
 
 
-def emit_memory_load(lines, resource_name, offset, type_name, slots):
+def emit_checked_address(
+    lines,
+    resource_name,
+    offset,
+    type_name,
+    capacity,
+    slots,
+    memory_error_label,
+):
     lines.append(f"\tmovq {slots[resource_name]}(%rbp), %rcx")
+    if offset[0] == "imm":
+        return f"{offset[1]}(%rcx)"
+    emit_load_operand(lines, offset, slots, "rdx")
+    maximum = capacity - TYPE_WIDTHS[type_name]
+    lines.extend(
+        [
+            f"\tcmpq ${maximum}, %rdx",
+            f"\tja {memory_error_label}",
+        ]
+    )
+    alignment_mask = TYPE_WIDTHS[type_name] - 1
+    if alignment_mask:
+        lines.extend(
+            [
+                f"\ttestq ${alignment_mask}, %rdx",
+                f"\tjnz {memory_error_label}",
+            ]
+        )
+    return "(%rcx,%rdx)"
+
+
+def emit_memory_load(
+    lines,
+    resource_name,
+    offset,
+    type_name,
+    capacity,
+    slots,
+    memory_error_label,
+):
+    address = emit_checked_address(
+        lines,
+        resource_name,
+        offset,
+        type_name,
+        capacity,
+        slots,
+        memory_error_label,
+    )
     instruction = {
         "u8": "movzbq",
         "bool": "movzbq",
@@ -771,12 +890,29 @@ def emit_memory_load(lines, resource_name, offset, type_name, slots):
         "isize": "movq",
     }[type_name]
     destination = "%eax" if type_name == "u32" else "%rax"
-    lines.append(f"\t{instruction} {offset}(%rcx), {destination}")
+    lines.append(f"\t{instruction} {address}, {destination}")
 
 
-def emit_memory_store(lines, resource_name, offset, type_name, value, slots):
+def emit_memory_store(
+    lines,
+    resource_name,
+    offset,
+    type_name,
+    value,
+    capacity,
+    slots,
+    memory_error_label,
+):
     emit_load_operand(lines, value, slots, "rax")
-    lines.append(f"\tmovq {slots[resource_name]}(%rbp), %rcx")
+    address = emit_checked_address(
+        lines,
+        resource_name,
+        offset,
+        type_name,
+        capacity,
+        slots,
+        memory_error_label,
+    )
     instruction, source = {
         "u8": ("movb", "%al"),
         "i8": ("movb", "%al"),
@@ -790,13 +926,27 @@ def emit_memory_store(lines, resource_name, offset, type_name, value, slots):
         "usize": ("movq", "%rax"),
         "isize": ("movq", "%rax"),
     }[type_name]
-    lines.append(f"\t{instruction} {source}, {offset}(%rcx)")
+    lines.append(f"\t{instruction} {source}, {address}")
 
 
-def emit_expression(lines, expression, slots, arithmetic_error_label):
+def emit_expression(
+    lines,
+    expression,
+    slots,
+    arithmetic_error_label,
+    memory_error_label=None,
+):
     if expression[0] == "load":
-        _kind, resource_name, offset, type_name = expression
-        emit_memory_load(lines, resource_name, offset, type_name, slots)
+        _kind, resource_name, offset, type_name, capacity = expression
+        emit_memory_load(
+            lines,
+            resource_name,
+            offset,
+            type_name,
+            capacity,
+            slots,
+            memory_error_label,
+        )
         return
     if expression[0] == "call":
         _kind, function_name, arguments, _return_type = expression
@@ -910,6 +1060,7 @@ def emit_function(lines, name, statements, prefix):
     returned = False
     arithmetic_error_label = f".L{prefix[1:]}_arithmetic_error"
     loop_error_label = f".L{prefix[1:]}_loop_budget_error"
+    memory_error_label = f".L{prefix[1:]}_memory_range_error"
 
     def emit_statement_list(statement_list):
         nonlocal returned
@@ -970,13 +1121,26 @@ def emit_function(lines, name, statements, prefix):
             )
             active.remove(resource_name)
         elif statement_kind == "store":
-            resource_name, offset, type_name, value = statement[1:]
+            resource_name, offset, type_name, value, capacity = statement[1:]
             emit_memory_store(
-                lines, resource_name, offset, type_name, value, slots
+                lines,
+                resource_name,
+                offset,
+                type_name,
+                value,
+                capacity,
+                slots,
+                memory_error_label,
             )
         elif statement_kind in ("var", "assign"):
             variable_name, expression = statement[1:3]
-            emit_expression(lines, expression, slots, arithmetic_error_label)
+            emit_expression(
+                lines,
+                expression,
+                slots,
+                arithmetic_error_label,
+                memory_error_label,
+            )
             lines.append(f"\tmovq %rax, {slots[variable_name]}(%rbp)")
         elif statement_kind == "if":
             condition, then_statements, else_statements = statement[1:]
@@ -1033,6 +1197,9 @@ def emit_function(lines, name, statements, prefix):
     if loop_ids:
         lines.append(f"{loop_error_label}:")
         emit_return(lines, resources, slots, -40, stack_size)
+    if has_dynamic_memory_access(statements):
+        lines.append(f"{memory_error_label}:")
+        emit_return(lines, resources, slots, -34, stack_size)
     lines.extend([f".size {name}, .-{name}", ""])
 
 

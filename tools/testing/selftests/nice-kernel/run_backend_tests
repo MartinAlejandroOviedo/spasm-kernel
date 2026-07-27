@@ -231,6 +231,49 @@ expect_failure stored_value_type_mismatch_rejected \
 	"$target" "$test_root/memory_value_type.spasm" \
 	--out-dir "$test_root/memory_value_type"
 
+printf '%s\n' \
+	'module "dynamic_index"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(16) else return -ENOMEM' \
+	'  var indice: usize = 4;' \
+	'  guardar<u32>(buffer, indice, 42);' \
+	'  var valor: u32 = cargar<u32>(buffer, indice);' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/dynamic_index.spasm"
+expect_success dynamic_usize_index \
+	"$target" "$test_root/dynamic_index.spasm" \
+	--out-dir "$test_root/dynamic_index"
+dynamic_asm="$test_root/dynamic_index/dynamic_index_native.S"
+if grep -q 'ja .Linit_memory_range_error' "$dynamic_asm" &&
+	grep -q 'jnz .Linit_memory_range_error' "$dynamic_asm" &&
+	grep -q 'movl \$-34, %eax' "$dynamic_asm"; then
+	echo "ok - dynamic_index_emits_range_alignment_cleanup"
+	pass=$((pass + 1))
+else
+	echo "not ok - dynamic_index_emits_range_alignment_cleanup"
+	fail=$((fail + 1))
+fi
+
+printf '%s\n' \
+	'module "wrong_index_type"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(16) else return -ENOMEM' \
+	'  var indice: i64 = 4;' \
+	'  guardar<u32>(buffer, indice, 42);' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/wrong_index_type.spasm"
+expect_failure dynamic_index_must_be_usize \
+	"$target" "$test_root/wrong_index_type.spasm" \
+	--out-dir "$test_root/wrong_index_type"
+
 echo "1..$((pass + fail))"
 echo "# pass=$pass fail=$fail"
 test "$fail" -eq 0

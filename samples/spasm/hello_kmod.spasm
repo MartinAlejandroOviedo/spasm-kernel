@@ -23,6 +23,12 @@ on load {
 	if (lectura == 424242) {
 		klog("Memoria tipada SpASM comprobada")
 	}
+	var indice: usize = 8;
+	guardar<u16>(buffer, indice, 1234);
+	var lectura_dinamica: u16 = cargar<u16>(buffer, indice);
+	if (lectura_dinamica == 1234) {
+		klog("Indice dinamico SpASM comprobado")
+	}
 	usar buffer
 	klog("Memoria nativa SpASM asignada y utilizada")
 	var alias: ptr<u8> = identidad_buffer(buffer);

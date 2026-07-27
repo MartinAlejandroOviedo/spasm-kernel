@@ -259,6 +259,24 @@ Antes de generar una instrucción de memoria, el compilador comprueba:
 - que el valor almacenado tiene exactamente el tipo solicitado.
 
 El backend selecciona cargas con extensión de signo o cero según `i8/u8`,
-`i16/u16` e `i32/u32`; los tipos de 64 bits se transfieren completos. No se
-aceptan offsets dinámicos ni accesos mediante alias en esta primera versión,
-por lo que los límites siempre son demostrables durante la compilación.
+`i16/u16` e `i32/u32`; los tipos de 64 bits se transfieren completos. Los
+accesos mediante alias permanecen deshabilitados; el recurso propietario
+conserva la capacidad necesaria para comprobar cada operación.
+
+Los algoritmos también pueden utilizar un offset variable de tipo `usize`:
+
+```text
+var indice: usize = 8;
+guardar<u16>(buffer, indice, 1234);
+var lectura: u16 = cargar<u16>(buffer, indice);
+```
+
+Para un offset dinámico, el backend emite antes de cada acceso:
+
+- comparación sin signo contra `capacidad - sizeof(T)`;
+- comprobación de la máscara de alineación;
+- salto a una ruta común de error si alguna condición falla.
+
+La ruta de error retorna `-ERANGE` y libera en orden inverso todos los recursos
+que continúen vivos. Un índice dinámico de cualquier tipo distinto de `usize`
+es rechazado. Los accesos mediante alias todavía permanecen deshabilitados.
