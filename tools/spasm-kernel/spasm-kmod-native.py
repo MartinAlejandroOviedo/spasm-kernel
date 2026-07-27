@@ -37,6 +37,9 @@ TYPED_VAR_RE = re.compile(
     r"\s*=\s*([^;{}]+)\s*;"
 )
 ASSIGN_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;{}]+)\s*;")
+FIELD_ASSIGN_RE = re.compile(
+    r"([A-Za-z_][A-Za-z0-9_]*)((?:\s*\.\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*=\s*([^;{}]+)\s*;"
+)
 IF_HEAD_RE = re.compile(r"if\s*\(([^()]*)\)\s*\{")
 WHILE_HEAD_RE = re.compile(r"while\s*\(([^()]*)\)\s*\{")
 NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -83,6 +86,22 @@ PARAM_RE = re.compile(
 POINTER_TYPE_RE = re.compile(
     r"^ptr<([A-Za-z_][A-Za-z0-9_]*)>(\?)?$"
 )
+STRUCT_HEAD_RE = re.compile(
+    r"\bstruct\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{"
+)
+FIELD_RE = re.compile(
+    r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
+    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)\s*;?\s*$"
+)
+DOT_ACCESS_RE = re.compile(
+    r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*$"
+)
+CHAINED_DOT_RE = re.compile(
+    r"^\s*([A-Za-z_][A-Za-z0-9_]*)(\s*\.\s*[A-Za-z_][A-Za-z0-9_]*)*\s*$"
+)
+FIELD_PATH_RE = re.compile(
+    r"([A-Za-z_][A-Za-z0-9_]*)"
+)
 LOAD_RE = re.compile(
     r"^\s*cargar<([A-Za-z_][A-Za-z0-9_]*)>\(\s*"
     r"([A-Za-z_][A-Za-z0-9_]*)\s*,\s*"
@@ -105,6 +124,99 @@ ABI_V2_EXPORTED_TYPES = {"u64", "i64", "usize", "isize"}
 KERNEL_EXTERN_ALLOWLIST = {
     "gcd": (("usize", "usize"), "usize"),
 }
+
+STRUCT_LAYOUTS = {}
+
+
+def compute_struct_layout(name, fields):
+    offset = 0
+    max_align = 1
+    field_info = {}
+    for field_name, field_type in fields:
+        field_width, field_align = type_size_and_align(field_type)
+        padding = (field_align - (offset % field_align)) % field_align
+        offset += padding
+        field_info[field_name] = (offset, field_type)
+        offset += field_width
+        max_align = max(max_align, field_align)
+    tail_padding = (max_align - (offset % max_align)) % max_align
+    total_size = offset + tail_padding
+    result = {
+        "size": total_size,
+        "align": max_align,
+        "fields": field_info,
+    }
+    STRUCT_LAYOUTS[name] = result
+    return result
+
+
+def type_size_and_align(type_name):
+    if type_name in TYPE_WIDTHS:
+        w = TYPE_WIDTHS[type_name]
+        return w, w
+    if is_struct_type(type_name):
+        layout = STRUCT_LAYOUTS.get(type_name)
+        if layout:
+            return layout["size"], layout["align"]
+    if is_pointer_type(type_name):
+        return 8, 8
+    raise CompileError(f"tipo sin tamano conocido: {type_name}")
+
+
+def is_struct_type(type_name):
+    return type_name in STRUCT_LAYOUTS
+
+
+def extract_structs(source):
+    structs = {}
+    spans = []
+    position = 0
+    while True:
+        match = STRUCT_HEAD_RE.search(source, position)
+        if not match:
+            break
+        name = match.group(1)
+        if name in structs:
+            raise CompileError(f"struct duplicado: {name}")
+        if name in INTEGER_TYPES:
+            raise CompileError(f"struct {name} colisiona con tipo integrado")
+        open_index = match.end() - 1
+        close_index = find_closing_brace(source, open_index)
+        body = source[open_index + 1 : close_index]
+        fields = []
+        field_names = set()
+        for piece in body.split(";"):
+            if not piece.strip():
+                continue
+            field_match = FIELD_RE.match(piece)
+            if not field_match:
+                raise CompileError(
+                    f"declaracion invalida en struct {name}: {piece.strip()!r}"
+                )
+            fname, ftype = field_match.groups()
+            if fname in field_names:
+                raise CompileError(
+                    f"campo duplicado en struct {name}: {fname}"
+                )
+            if not is_supported_type(ftype) and ftype not in structs:
+                raise CompileError(
+                    f"tipo de campo no soportado en struct {name} "
+                    f"campo {fname}: {ftype}"
+                )
+            field_names.add(fname)
+            fields.append((fname, ftype))
+        if not fields:
+            raise CompileError(f"struct {name} sin campos")
+        structs[name] = fields
+        spans.append((match.start(), close_index + 1))
+        position = close_index + 1
+
+    remaining = list(source)
+    for start, end in spans:
+        remaining[start:end] = " " * (end - start)
+    for sname, sfields in structs.items():
+        compute_struct_layout(sname, sfields)
+    return structs, "".join(remaining)
 
 
 def decode_string(value):
@@ -131,7 +243,9 @@ def asm_string(value):
 
 def parse_source(source, kind="module"):
     metadata = {}
+    STRUCT_LAYOUTS.clear()
     block_texts, source_without_blocks = extract_on_blocks(source)
+    structs, source_without_blocks = extract_structs(source_without_blocks)
     functions, source_without_blocks = extract_functions(source_without_blocks)
     externs, source_without_blocks = extract_externs(source_without_blocks)
     functions.extend(externs)
@@ -160,6 +274,7 @@ def parse_source(source, kind="module"):
             if (
                 type_name not in ABI_V2_EXPORTED_TYPES
                 and not is_pointer_type(type_name)
+                and not is_struct_type(type_name)
             ):
                 raise CompileError(
                     f"export fn {function['name']}: {type_name} "
@@ -407,8 +522,13 @@ def pointer_type(type_name):
 def is_supported_type(type_name):
     if type_name in INTEGER_TYPES:
         return True
+    if is_struct_type(type_name):
+        return True
     match = pointer_type(type_name)
-    return bool(match and match.group(1) in INTEGER_TYPES)
+    if match:
+        inner = match.group(1)
+        return inner in INTEGER_TYPES or is_struct_type(inner)
+    return False
 
 
 def is_pointer_type(type_name):
@@ -495,6 +615,16 @@ def validate_immediate(value, type_name):
 def validate_expression_type(expression, variable_types, expected_type):
     if is_pointer_type(expected_type) and len(expression) != 1:
         raise CompileError("aritmetica de punteros no permitida")
+    if is_struct_type(expected_type):
+        if len(expression) == 1 and expression[0][0] == "imm":
+            if expression[0][1] == 0:
+                return expected_type
+            raise CompileError(
+                f"solo 0 es valido para inicializar struct {expected_type}"
+            )
+        raise CompileError(
+            f"struct {expected_type} solo admite inicializacion con 0"
+        )
     for operand in expression[::2]:
         kind, value = operand
         if kind == "imm":
@@ -507,7 +637,62 @@ def validate_expression_type(expression, variable_types, expected_type):
     return expected_type
 
 
+def resolve_field_path(base_name, field_names, variables):
+    base_type = variables[base_name]
+    if not is_struct_type(base_type):
+        raise CompileError(f"{base_name} no es un struct (es {base_type})")
+    total_offset = 0
+    current_type = base_type
+    resolved_names = [base_name]
+    for fname in field_names:
+        layout = STRUCT_LAYOUTS[current_type]
+        field_info = layout["fields"].get(fname)
+        if field_info is None:
+            raise CompileError(
+                f"struct {current_type} no tiene campo {fname}"
+            )
+        field_offset, field_type = field_info
+        total_offset += field_offset
+        current_type = field_type
+        resolved_names.append(fname)
+    return total_offset, current_type
+
+
 def parse_value_expression(value, variables, functions, expected_type):
+    chained = CHAINED_DOT_RE.match(value)
+    if chained:
+        base_name = chained.group(1)
+        if "." in value:
+            field_names = FIELD_PATH_RE.findall(value)
+            field_names = field_names[1:]
+            total_offset, field_type = resolve_field_path(
+                base_name, field_names, variables
+            )
+            if field_type != expected_type:
+                path = ".".join([base_name] + field_names)
+                raise CompileError(
+                    f"campo {path} es {field_type}, "
+                    f"se esperaba {expected_type}"
+                )
+            return (
+                "field_access",
+                base_name,
+                field_names,
+                field_type,
+                total_offset,
+            )
+    dot_match = DOT_ACCESS_RE.match(value)
+    if dot_match:
+        base_name, field_name = dot_match.groups()
+        total_offset, field_type = resolve_field_path(
+            base_name, [field_name], variables
+        )
+        if field_type != expected_type:
+            raise CompileError(
+                f"campo {base_name}.{field_name} es {field_type}, "
+                f"se esperaba {expected_type}"
+            )
+        return ("field_access", base_name, [field_name], field_type, total_offset)
     load_match = LOAD_RE.match(value)
     if load_match:
         load_type, resource_name, offset_text = load_match.groups()
@@ -615,6 +800,7 @@ def parse_statements(
         ("typed_var", TYPED_VAR_RE),
         ("var", VAR_RE),
         ("assign", ASSIGN_RE),
+        ("field_assign", FIELD_ASSIGN_RE),
     )
     statements = []
     position = 0
@@ -822,6 +1008,31 @@ def parse_statements(
                     statement = list(statements[-1])
                     statement[2] = replacement
                     statements[-1] = tuple(statement)
+            elif statement_kind == "field_assign":
+                base_name, dot_chain, expression_text = values
+                if base_name not in variables:
+                    raise CompileError(f"variable no declarada: {base_name}")
+                field_names = FIELD_PATH_RE.findall(dot_chain) if dot_chain.strip() else []
+                if not field_names:
+                    raise CompileError(
+                        f"asignacion de campo requiere campo: {base_name}"
+                    )
+                total_offset, field_type = resolve_field_path(
+                    base_name, field_names, variables
+                )
+                expression = parse_value_expression(
+                    expression_text, variables, functions, field_type
+                )
+                statements.append(
+                    (
+                        "store_field",
+                        base_name,
+                        field_names,
+                        total_offset,
+                        field_type,
+                        expression,
+                    )
+                )
             else:
                 if block_kind == "function":
                     expression = parse_value_expression(
@@ -899,8 +1110,8 @@ def collect_loop_ids(statements):
 
 def has_division(statements):
     for statement in statements:
-        if statement[0] in ("var", "assign"):
-            expression = statement[2]
+        if statement[0] in ("var", "assign", "store_field"):
+            expression = statement[2] if statement[0] != "store_field" else statement[5]
             if len(expression) == 3 and expression[1] in ("/", "%"):
                 return True
         elif statement[0] == "return_expr":
@@ -1093,6 +1304,35 @@ def emit_expression(
             memory_error_label,
         )
         return
+    if expression[0] == "field_access":
+        _kind, base_name, _field_names, field_type, field_offset = expression
+        base_slot = slots[base_name]
+        instruction = {
+            "u8": "movzbq",
+            "bool": "movzbq",
+            "i8": "movsbq",
+            "u16": "movzwq",
+            "i16": "movswq",
+            "u32": "movl",
+            "i32": "movslq",
+            "u64": "movq",
+            "i64": "movq",
+            "usize": "movq",
+            "isize": "movq",
+        }.get(field_type)
+        if instruction is None:
+            raise CompileError(
+                f"tipo de campo no soportado: {field_type}"
+            )
+        if field_type in ("u32",):
+            lines.append(
+                f"\t{instruction} {base_slot + field_offset}(%rbp), %eax"
+            )
+        else:
+            lines.append(
+                f"\t{instruction} {base_slot + field_offset}(%rbp), %rax"
+            )
+        return
     if expression[0] == "call":
         _kind, function_name, arguments, _return_type, external = expression
         for operand, register in zip(arguments, ARG_REGISTERS):
@@ -1149,21 +1389,63 @@ def emit_native_function(lines, function, builtin=False):
     )
 
 
+def collect_slot_types(resources, params, statements):
+    slot_types = {}
+    for resource_name in resources:
+        slot_types[resource_name] = "ptr<u8>"
+    for param_name, param_type in params:
+        slot_types[param_name] = param_type
+    variable_types = collect_variables_with_types(statements)
+    for var_name, var_type in variable_types.items():
+        slot_types[var_name] = var_type
+    loop_ids = collect_loop_ids(statements)
+    for loop_id in loop_ids:
+        slot_types[f"__loop_budget_{loop_id}"] = "i64"
+    return slot_types
+
+
+def collect_variables_with_types(statements):
+    result = {}
+    for statement in statements:
+        if statement[0] == "var":
+            result[statement[1]] = statement[3]
+        elif statement[0] == "if":
+            result.update(collect_variables_with_types(statement[2]))
+            result.update(collect_variables_with_types(statement[3]))
+        elif statement[0] == "while":
+            result.update(collect_variables_with_types(statement[3]))
+    return result
+
+
+def compute_slots(resources, params, statements):
+    slot_types = collect_slot_types(resources, params, statements)
+    slots = {}
+    offset = 0
+    sorted_names = sorted(
+        slot_types.keys(),
+        key=lambda n: (
+            0 if n.startswith("__loop_budget_") else
+            1 if n in resources else
+            2
+        ),
+    )
+    for name in sorted_names:
+        type_name = slot_types[name]
+        width, align = type_size_and_align(type_name)
+        padding = (align - (offset % align)) % align
+        offset += padding
+        offset += width
+        slots[name] = -(offset)
+    return slots, offset
+
+
 def emit_function(
     lines, name, statements, prefix, params=(), global_symbol=True
 ):
     resources = collect_resources(statements)
-    variables = collect_variables(statements)
     loop_ids = collect_loop_ids(statements)
-    loop_slots = [f"__loop_budget_{loop_id}" for loop_id in loop_ids]
-    param_names = [param_name for param_name, _param_type in params]
-    slot_names = resources + param_names + variables + loop_slots
-    if len(slot_names) != len(set(slot_names)):
-        raise CompileError("colision de nombres entre variables o recursos")
-    slots = {
-        slot_name: -8 * (index + 1) for index, slot_name in enumerate(slot_names)
-    }
-    stack_size = ((len(slot_names) * 8 + 15) // 16) * 16
+    slots, raw_stack = compute_slots(resources, params, statements)
+    stack_size = ((raw_stack + 15) // 16) * 16
     section = ".text" if prefix == ".text" else f"{prefix}.text"
     lines.extend(
         [
@@ -1179,8 +1461,28 @@ def emit_function(
     )
     if stack_size:
         lines.append(f"\tsubq ${stack_size}, %rsp")
-    for offset in slots.values():
-        lines.append(f"\tmovq $0, {offset}(%rbp)")
+    slot_types = collect_slot_types(
+        resources, params, statements
+    )
+    for slot_name, slot_offset in slots.items():
+        slot_type = slot_types.get(slot_name, "i64")
+        if is_struct_type(slot_type):
+            layout = STRUCT_LAYOUTS[slot_type]
+            pos = slot_offset
+            remaining = layout["size"]
+            while remaining >= 8:
+                lines.append(f"\tmovq $0, {pos}(%rbp)")
+                pos += 8
+                remaining -= 8
+            if remaining >= 4:
+                lines.append(f"\tmovl $0, {pos}(%rbp)")
+                pos += 4
+            if remaining >= 2:
+                lines.append(f"\tmovw $0, {pos}(%rbp)")
+            if remaining >= 1:
+                lines.append(f"\tmovb $0, {pos}(%rbp)")
+        else:
+            lines.append(f"\tmovq $0, {slot_offset}(%rbp)")
     for (param_name, _param_type), register in zip(params, ARG_REGISTERS):
         lines.append(f"\tmovq %{register}, {slots[param_name]}(%rbp)")
 
@@ -1263,15 +1565,46 @@ def emit_function(
             )
         elif statement_kind in ("var", "assign"):
             variable_name, expression, value_type = statement[1:4]
+            if is_struct_type(value_type) and len(expression) == 1 and expression[0] == ("imm", 0):
+                pass
+            else:
+                emit_expression(
+                    lines,
+                    expression,
+                    slots,
+                    arithmetic_error_label,
+                    memory_error_label,
+                    value_type,
+                )
+                lines.append(f"\tmovq %rax, {slots[variable_name]}(%rbp)")
+        elif statement_kind == "store_field":
+            base_name, _field_names, field_offset, field_type, expression = statement[1:]
             emit_expression(
                 lines,
                 expression,
                 slots,
                 arithmetic_error_label,
                 memory_error_label,
-                value_type,
+                field_type,
             )
-            lines.append(f"\tmovq %rax, {slots[variable_name]}(%rbp)")
+            base_slot = slots[base_name]
+            store_instr, source_reg = {
+                "u8": ("movb", "%al"),
+                "i8": ("movb", "%al"),
+                "bool": ("movb", "%al"),
+                "u16": ("movw", "%ax"),
+                "i16": ("movw", "%ax"),
+                "u32": ("movl", "%eax"),
+                "i32": ("movl", "%eax"),
+                "u64": ("movq", "%rax"),
+                "i64": ("movq", "%rax"),
+                "usize": ("movq", "%rax"),
+                "isize": ("movq", "%rax"),
+            }.get(field_type, ("movq", "%rax"))
+            lines.append(
+                f"\t{store_instr} {source_reg}, "
+                f"{base_slot + field_offset}(%rbp)"
+            )
         elif statement_kind == "if":
             condition, then_statements, else_statements = statement[1:]
             left, comparator, right = condition
