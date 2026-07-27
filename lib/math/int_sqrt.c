@@ -11,6 +11,12 @@
 #include <linux/limits.h>
 #include <linux/math.h>
 
+#include "int_sqrt_nice.h"
+
+#ifdef CONFIG_NICE_KERNEL_INT_SQRT_DUAL
+#define int_sqrt nice_int_sqrt_c
+#endif
+
 /**
  * int_sqrt - computes the integer square root
  * @x: integer of which to calculate the sqrt
@@ -38,7 +44,9 @@ unsigned long int_sqrt(unsigned long x)
 
 	return y;
 }
+#ifndef CONFIG_NICE_KERNEL_INT_SQRT_DUAL
 EXPORT_SYMBOL(int_sqrt);
+#endif
 
 #if BITS_PER_LONG < 64
 /**

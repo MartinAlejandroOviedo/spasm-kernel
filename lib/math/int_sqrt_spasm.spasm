@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// Nice Kernel replacement for Linux int_sqrt().
+// Pure function: no state, no side effects.
+
+export fn nice_int_sqrt_spasm(x: usize) -> usize {
+	if (x <= 1) {
+		return x;
+	}
+	var m: usize = 1;
+	var limit: usize = x / 4;
+	while (m <= limit) {
+		m = m * 4;
+	}
+	var y: usize = 0;
+	var b: usize = 0;
+	while (m != 0) {
+		b = y + m;
+		y = y / 2;
+		if (x >= b) {
+			x = x - b;
+			y = y + m;
+		}
+		m = m / 4;
+	}
+	return y;
+}
