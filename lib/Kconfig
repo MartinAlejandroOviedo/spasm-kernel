@@ -9,7 +9,37 @@ config BINARY_PRINTF
 menu "Library routines"
 
 choice
+	prompt "Nice Kernel global migration mode"
+	default NICE_KERNEL_MODE_SPASM
+	depends on X86_64
+
+config NICE_KERNEL_MODE_C
+	bool "Original Linux C (all functions)"
+	help
+	  Use the original C implementations for all migrated functions.
+	  This is the safe fallback mode.
+
+config NICE_KERNEL_MODE_SPASM
+	bool "SpASM (all migrated functions)"
+	help
+	  Replace all migrated functions with their SpASM implementations.
+	  Per-function overrides still available.
+
+config NICE_KERNEL_MODE_DUAL
+	bool "Dual C/SpASM comparison"
+	help
+	  Execute both C and SpASM for every migrated function call.
+	  Return the SpASM result and report any mismatch.
+	  Intended for migration validation, not production.
+
+endchoice
+
+comment "Per-function overrides (when global mode is not sufficient)"
+
+choice
 	prompt "Nice Kernel _bcd2bin implementation"
+	default NICE_KERNEL_BCD_SPASM if NICE_KERNEL_MODE_SPASM
+	default NICE_KERNEL_BCD_DUAL if NICE_KERNEL_MODE_DUAL
 	default NICE_KERNEL_BCD_C
 	depends on X86_64
 
@@ -26,6 +56,8 @@ endchoice
 
 choice
 	prompt "Nice Kernel hex_to_bin implementation"
+	default NICE_KERNEL_HEX_TO_BIN_SPASM if NICE_KERNEL_MODE_SPASM
+	default NICE_KERNEL_HEX_TO_BIN_DUAL if NICE_KERNEL_MODE_DUAL
 	default NICE_KERNEL_HEX_TO_BIN_C
 	depends on X86_64
 
@@ -34,9 +66,6 @@ config NICE_KERNEL_HEX_TO_BIN_C
 
 config NICE_KERNEL_HEX_TO_BIN_SPASM
 	bool "SpASM implementation"
-	help
-	  Use SpASM implementation of hex_to_bin(). The C version
-	  in hexdump.c is compiled as __weak and overridden at link time.
 
 config NICE_KERNEL_HEX_TO_BIN_DUAL
 	bool "Dual C/SpASM comparison"

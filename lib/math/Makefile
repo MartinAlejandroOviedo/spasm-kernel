@@ -2,7 +2,7 @@
 obj-y += div64.o lcm.o int_log.o int_pow.o reciprocal_div.o
 
 obj-$(CONFIG_NICE_KERNEL_GCD_C) += gcd.o
-obj-$(CONFIG_NICE_KERNEL_SPASM_GCD) += gcd_spasm.o gcd_spasm_entry.o gcd_export.o
+obj-$(CONFIG_NICE_KERNEL_GCD_SPASM) += gcd_spasm.o gcd_spasm_entry.o gcd_export.o
 obj-$(CONFIG_NICE_KERNEL_GCD_DUAL) += gcd.o gcd_spasm.o gcd_dual.o
 
 obj-$(CONFIG_NICE_KERNEL_INT_SQRT_C) += int_sqrt.o

@@ -1,31 +1,26 @@
 # SPDX-License-Identifier: GPL-2.0-only
 choice
 	prompt "Nice Kernel gcd implementation"
+	default NICE_KERNEL_GCD_SPASM if NICE_KERNEL_MODE_SPASM
+	default NICE_KERNEL_GCD_DUAL if NICE_KERNEL_MODE_DUAL
 	default NICE_KERNEL_GCD_C
 	depends on X86_64
 
 config NICE_KERNEL_GCD_C
 	bool "Original Linux C implementation"
 
-config NICE_KERNEL_SPASM_GCD
+config NICE_KERNEL_GCD_SPASM
 	bool "SpASM implementation"
-	help
-	  Build the kernel's gcd() implementation from SpASM while preserving
-	  the existing Linux x86_64 ABI and exported symbol.
-
-	  This is the first reversible function migration for Nice Kernel.
 
 config NICE_KERNEL_GCD_DUAL
 	bool "Dual C/SpASM comparison"
-	help
-	  Execute the original C implementation and the SpASM implementation
-	  for every gcd() call. Return the SpASM result and report any mismatch.
-	  This mode is intended for migration validation, not production.
 
 endchoice
 
 choice
 	prompt "Nice Kernel int_sqrt implementation"
+	default NICE_KERNEL_INT_SQRT_SPASM if NICE_KERNEL_MODE_SPASM
+	default NICE_KERNEL_INT_SQRT_DUAL if NICE_KERNEL_MODE_DUAL
 	default NICE_KERNEL_INT_SQRT_C
 	depends on X86_64
 
@@ -34,16 +29,9 @@ config NICE_KERNEL_INT_SQRT_C
 
 config NICE_KERNEL_INT_SQRT_SPASM
 	bool "SpASM implementation"
-	help
-	  Build the kernel's int_sqrt() implementation from SpASM while
-	  preserving the existing Linux x86_64 ABI and exported symbol.
 
 config NICE_KERNEL_INT_SQRT_DUAL
 	bool "Dual C/SpASM comparison"
-	help
-	  Execute the original C implementation and the SpASM implementation
-	  for every int_sqrt() call. Return the SpASM result and report any
-	  mismatch. This mode is intended for migration validation.
 
 endchoice
 
