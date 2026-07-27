@@ -13,7 +13,7 @@ __pycache__/
 *.pyc
 *.egg-info/
 
-# Bloquear archivos del kernel original
+# Bloquear archivos del kernel original (no los nuestros)
 arch/
 block/
 certs/
@@ -34,7 +34,6 @@ sound/
 usr/
 virt/
 .config*
-include/
 
 # Misc
 vmlinux*
