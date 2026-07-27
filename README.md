@@ -3,6 +3,8 @@
 Overlay para reemplazar funciones del kernel Linux 6.19.14 x86_64
 con implementaciones en SpASM.
 
+**Repo:** https://github.com/MartinAlejandroOviedo/spasm-kernel
+
 ---
 
 ## Aplicar sobre Linux 6.19.14 limpio
@@ -12,11 +14,14 @@ wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.19.14.tar.xz
 tar xf linux-6.19.14.tar.xz
 cd linux-6.19.14
 
-# 1. Aplicar parche a archivos existentes del kernel
-git apply /ruta/spasm-kernel/spasm-kernel.patch
+# 1. Clonar el overlay
+git clone https://github.com/MartinAlejandroOviedo/spasm-kernel.git overlay
 
-# 2. Copiar archivos nuevos del overlay
-cp -r /ruta/spasm-kernel/* .
+# 2. Aplicar parche a archivos existentes del kernel
+git apply overlay/spasm-kernel.patch
+
+# 3. Copiar archivos nuevos del overlay
+cp -r overlay/* .
 ```
 
 ---
