@@ -22,7 +22,7 @@ personal del compilador.
 
 - `SPASMC`: ruta al compilador propio `spasmc.py`.
 - `SPASM_TARGET`: target del compilador; por defecto
-  `nice-kernel-x86_64`.
+  `spasm-kernel-x86_64`.
 - `SPASM_TARGET_PATH`: directorio de targets; por defecto
   `tools/spasm-kernel` dentro del árbol.
 
@@ -46,7 +46,7 @@ make O=/ruta/build ARCH=x86_64 \
   versionado de símbolos y las advertencias normales de objetos compartidos.
 - `.S` conserva precedencia cuando un subsistema ofrece deliberadamente tanto
   una fuente `.S` como una `.spasm` con el mismo nombre base.
-- La salida debe obedecer `docs/nice-kernel/spasm-linux-abi-v2.md`; Kbuild no
+- La salida debe obedecer `docs/spasm-kernel/spasm-linux-abi-v2.md`; Kbuild no
   sustituye la validación semántica del backend.
 
 ## Primera migración
@@ -58,7 +58,7 @@ implementación está en
 ## Verificación
 
 ```sh
-tools/testing/selftests/nice-kernel/run_kbuild_spasm
+tools/testing/selftests/spasm-kernel/run_kbuild_spasm
 ```
 
 La prueba comprueba construcción incremental, reconstrucción determinista,

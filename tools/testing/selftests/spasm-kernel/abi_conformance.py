@@ -63,15 +63,15 @@ def check_builtin(build):
     obj = build / "lib/math/gcd_spasm.o"
     require(obj.is_file(), f"falta objeto builtin: {obj}")
 
-    symbols = symbol_rows(obj, "nice_gcd_spasm")
+    symbols = symbol_rows(obj, "spasm_gcd")
     require(len(symbols) == 1,
-            "nice_gcd_spasm debe estar definido exactamente una vez")
+            "spasm_gcd debe estar definido exactamente una vez")
     symbol = symbols[0]
     require(symbol[3] == "FUNC",
-            "nice_gcd_spasm no es un simbolo ELF FUNC")
+            "spasm_gcd no es un simbolo ELF FUNC")
     require(symbol[4] == "GLOBAL",
-            "nice_gcd_spasm no tiene visibilidad GLOBAL")
-    require(symbol[6] != "UND", "nice_gcd_spasm quedo indefinido")
+            "spasm_gcd no tiene visibilidad GLOBAL")
+    require(symbol[6] != "UND", "spasm_gcd quedo indefinido")
 
     sections = section_table(obj)
     require(".text" in sections, "falta seccion .text")
@@ -100,16 +100,16 @@ def check_builtin(build):
     )
 
     disassembly = run(
-        "objdump", "-dr", "--disassemble=nice_gcd_spasm", obj
+        "objdump", "-dr", "--disassemble=spasm_gcd", obj
     )
     require("endbr64" in disassembly,
-            "nice_gcd_spasm no comienza con ENDBR64")
+            "spasm_gcd no comienza con ENDBR64")
     require(re.search(r"\bpush\s+%rbp", disassembly), "falta prologo rbp")
     require(re.search(r"\bpop\s+%rbp", disassembly), "falta epilogo rbp")
     require("__x86_return_thunk" in disassembly,
             "los retornos no usan RET del kernel")
     require(not re.search(r"%(?:rbx|r12|r13|r14|r15)\b", disassembly),
-            "nice_gcd_spasm modifica registros callee-saved no soportados")
+            "spasm_gcd modifica registros callee-saved no soportados")
 
     entry = build / "lib/math/gcd_spasm_entry.o"
     require(entry.is_file(), f"falta entrada Linux: {entry}")
@@ -118,7 +118,7 @@ def check_builtin(build):
             and entry_symbols[0][4] == "GLOBAL",
             "la entrada gcd no preserva GLOBAL FUNC")
     entry_disassembly = run("objdump", "-dr", "--disassemble=gcd", entry)
-    require("nice_gcd_spasm" in entry_disassembly,
+    require("spasm_gcd" in entry_disassembly,
             "gcd no transfiere control al nucleo SpASM")
 
     reserved = [
@@ -173,10 +173,10 @@ def check_module(build):
 
     symbols = run("readelf", "-Ws", module)
     require(re.search(
-        r"\bFUNC\s+LOCAL\s+\S+\s+\S+\s+spasm_fn_nice_gcd$",
+        r"\bFUNC\s+LOCAL\s+\S+\s+\S+\s+spasm_fn_spasm_gcd_internal$",
         symbols,
         re.MULTILINE,
-    ), "nice_gcd interna no tiene visibilidad LOCAL")
+    ), "spasm_gcd_internal interna no tiene visibilidad LOCAL")
     for name in ("init_module", "cleanup_module"):
         rows = symbol_rows(module, name)
         require(len(rows) == 1 and rows[0][3] == "FUNC"
@@ -192,8 +192,8 @@ def main():
 
     try:
         config = (build / ".config").read_text(encoding="utf-8")
-        require("CONFIG_NICE_KERNEL_GCD_SPASM=y" in config,
-                "el build no selecciona CONFIG_NICE_KERNEL_GCD_SPASM=y")
+        require("CONFIG_SPASM_KERNEL_GCD_SPASM=y" in config,
+                "el build no selecciona CONFIG_SPASM_KERNEL_GCD_SPASM=y")
         check_builtin(build)
         print("ok - builtin ELF y ABI")
         check_vmlinux(build)

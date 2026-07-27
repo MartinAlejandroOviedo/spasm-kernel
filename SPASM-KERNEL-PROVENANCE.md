@@ -1,11 +1,11 @@
-# Nice Kernel 0.0.1 PoC
+# SpASM Kernel 0.0.1 PoC
 
 Este documento congela la primera prueba reproducible de ejecución de código
 SpASM nativo en Ring 0.
 
 ## Identidad
 
-- Proyecto: Nice Kernel
+- Proyecto: SpASM Kernel
 - Filosofía: Machine and User Care
 - Arquitectura: x86_64
 - Base: Linux 6.19.14
@@ -25,7 +25,7 @@ formal del compilador SpASM es el siguiente hito del proyecto.
 tools/spasm-kernel/project config
 tools/spasm-kernel/project build
 tools/spasm-kernel/project module
-tools/nice-kernel/verify-poc
+tools/spasm-kernel/verify-poc
 ```
 
 Directorio de construcción utilizado:
@@ -85,7 +85,7 @@ La prueba solamente se considera aprobada si QEMU muestra todas estas señales:
 
 ```text
 [spasm-init] Nice_Kernel_Machine_and_User_Care
-spasm: Nice Kernel: SpASM nativo activo en Ring 0
+spasm: SpASM Kernel: SpASM nativo activo en Ring 0
 spasm: Condicional SpASM nativo correcto
 spasm: Bucle SpASM nativo correcto
 spasm: Division y modulo SpASM correctos

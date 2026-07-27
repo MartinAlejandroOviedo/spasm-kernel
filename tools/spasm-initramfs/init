@@ -4,8 +4,8 @@ PATH=/bin:/sbin:/usr/bin:/usr/sbin
 export PATH
 
 mode=shell
-message="Nice_Kernel_Machine_and_User_Care"
-hostname=nice-kernel
+message="SpASM_Kernel_Machine_and_User_Care"
+hostname=spasm-kernel
 delay=0
 debug=0
 

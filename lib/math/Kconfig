@@ -1,36 +1,36 @@
 # SPDX-License-Identifier: GPL-2.0-only
 choice
-	prompt "Nice Kernel gcd implementation"
-	default NICE_KERNEL_GCD_SPASM if NICE_KERNEL_MODE_SPASM
-	default NICE_KERNEL_GCD_DUAL if NICE_KERNEL_MODE_DUAL
-	default NICE_KERNEL_GCD_C
+	prompt "SpASM Kernel gcd implementation"
+	default SPASM_KERNEL_GCD_SPASM if SPASM_KERNEL_MODE_SPASM
+	default SPASM_KERNEL_GCD_DUAL if SPASM_KERNEL_MODE_DUAL
+	default SPASM_KERNEL_GCD_C
 	depends on X86_64
 
-config NICE_KERNEL_GCD_C
+config SPASM_KERNEL_GCD_C
 	bool "Original Linux C implementation"
 
-config NICE_KERNEL_GCD_SPASM
+config SPASM_KERNEL_GCD_SPASM
 	bool "SpASM implementation"
 
-config NICE_KERNEL_GCD_DUAL
+config SPASM_KERNEL_GCD_DUAL
 	bool "Dual C/SpASM comparison"
 
 endchoice
 
 choice
-	prompt "Nice Kernel int_sqrt implementation"
-	default NICE_KERNEL_INT_SQRT_SPASM if NICE_KERNEL_MODE_SPASM
-	default NICE_KERNEL_INT_SQRT_DUAL if NICE_KERNEL_MODE_DUAL
-	default NICE_KERNEL_INT_SQRT_C
+	prompt "SpASM Kernel int_sqrt implementation"
+	default SPASM_KERNEL_INT_SQRT_SPASM if SPASM_KERNEL_MODE_SPASM
+	default SPASM_KERNEL_INT_SQRT_DUAL if SPASM_KERNEL_MODE_DUAL
+	default SPASM_KERNEL_INT_SQRT_C
 	depends on X86_64
 
-config NICE_KERNEL_INT_SQRT_C
+config SPASM_KERNEL_INT_SQRT_C
 	bool "Original Linux C implementation"
 
-config NICE_KERNEL_INT_SQRT_SPASM
+config SPASM_KERNEL_INT_SQRT_SPASM
 	bool "SpASM implementation"
 
-config NICE_KERNEL_INT_SQRT_DUAL
+config SPASM_KERNEL_INT_SQRT_DUAL
 	bool "Dual C/SpASM comparison"
 
 endchoice

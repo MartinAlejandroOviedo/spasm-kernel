@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Nice Kernel — Verificación integral de migración
+# SpASM Kernel — Verificación integral de migración
 #
 # Valida:
 #   1. Compilación de .spasm → .o (kbuild-test)
@@ -12,7 +12,7 @@
 #   6. Tamaño del kernel (size-report)
 #
 # Uso:
-#   tools/testing/selftests/nice-kernel/verify-all
+#   tools/testing/selftests/spasm-kernel/verify-all
 #   KERNEL_BUILD=/ruta/build SPASMC=/ruta/spasmc.py tools/.../verify-all
 
 set -eu
@@ -21,7 +21,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
 kernel_build=${KERNEL_BUILD:-"$kernel_src/../build-nice-spasm-gcd"}
 spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
-host_tools="$kernel_src/tools/nice-kernel/host-tools"
+host_tools="$kernel_src/tools/spasm-kernel/host-tools"
 bzimage="$kernel_build/arch/x86/boot/bzImage"
 initramfs="$kernel_build/spasm-initramfs.cpio.gz"
 qemu_timeout=30
@@ -37,7 +37,7 @@ die() { echo "FATAL: $*"; exit 1; }
 need_file() { [ -f "$1" ] || die "no existe: $1"; }
 
 # ---------------------------------------------------------------------------
-echo "=== Nice Kernel — Verificación integral ==="
+echo "=== SpASM Kernel — Verificación integral ==="
 echo "Fuentes : $kernel_src"
 echo "Build   : $kernel_build"
 echo "SpASM   : $spasmc"
@@ -47,7 +47,7 @@ echo
 echo "--- 1. Kbuild integration ---"
 if PATH="$host_tools:$PATH" \
    KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
-   "$kernel_src/tools/testing/selftests/nice-kernel/run_kbuild_spasm" \
+   "$kernel_src/tools/testing/selftests/spasm-kernel/run_kbuild_spasm" \
    >/dev/null 2>&1; then
     pass "kbuild_integration"
 else
@@ -58,7 +58,7 @@ fi
 echo "--- 2. ABI Linux–SpASM ---"
 if PATH="$host_tools:$PATH" \
    KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
-   "$kernel_src/tools/testing/selftests/nice-kernel/run_abi_conformance" \
+   "$kernel_src/tools/testing/selftests/spasm-kernel/run_abi_conformance" \
    >/dev/null 2>&1; then
     pass "abi_conformance"
 else
@@ -71,7 +71,7 @@ dual_build="$kernel_build/../build-nice-dual-gcd"
 if [ -f "$dual_build/.config" ]; then
     if PATH="$host_tools:$PATH" \
        KERNEL_BUILD="$dual_build" SPASMC="$spasmc" \
-       "$kernel_src/tools/testing/selftests/nice-kernel/run_gcd_dual" \
+       "$kernel_src/tools/testing/selftests/spasm-kernel/run_gcd_dual" \
        >/dev/null 2>&1; then
         pass "dual_mode"
     else
@@ -92,20 +92,20 @@ if timeout "$qemu_timeout" qemu-system-x86_64 \
     -machine accel=tcg -cpu max -m 256M -smp 2 \
     -kernel "$bzimage" -initrd "$initramfs" \
     -append "console=ttyS0 quiet spasm.mode=test spasm.message=NK spasm.hostname=nk spasm.delay=0 spasm.debug=0" \
-    -nographic -no-reboot > /tmp/nice-kernel-boot.log 2>&1; then
+    -nographic -no-reboot > /tmp/spasm-kernel-boot.log 2>&1; then
     pass "qemu_boot"
 else
-    if grep -q "RESULTADO: OK" /tmp/nice-kernel-boot.log 2>/dev/null; then
+    if grep -q "RESULTADO: OK" /tmp/spasm-kernel-boot.log 2>/dev/null; then
         pass "qemu_boot (timeout but OK in log)"
-    elif grep -q "RESULTADO: ERROR" /tmp/nice-kernel-boot.log 2>/dev/null; then
-        if grep -q "Modulo SpASM: ERROR AL CARGAR" /tmp/nice-kernel-boot.log 2>/dev/null; then
+    elif grep -q "RESULTADO: ERROR" /tmp/spasm-kernel-boot.log 2>/dev/null; then
+        if grep -q "Modulo SpASM: ERROR AL CARGAR" /tmp/spasm-kernel-boot.log 2>/dev/null; then
             pass "qemu_boot (kernel OK, módulo desactualizado)"
         else
             fail "qemu_boot" "ERROR en initramfs"
         fi
-    elif grep -q "Kernel panic" /tmp/nice-kernel-boot.log 2>/dev/null; then
+    elif grep -q "Kernel panic" /tmp/spasm-kernel-boot.log 2>/dev/null; then
         fail "qemu_boot" "KERNEL PANIC"
-        grep "Call Trace\|RIP:" /tmp/nice-kernel-boot.log | head -5
+        grep "Call Trace\|RIP:" /tmp/spasm-kernel-boot.log | head -5
     else
         fail "qemu_boot" "falló sin mensaje claro"
     fi
@@ -122,7 +122,7 @@ for sym in gcd int_sqrt _bcd2bin hex_to_bin; do
         continue
     fi
 done
-for entry in nice_gcd_spasm nice_int_sqrt_spasm nice_bcd2bin_spasm nice_hex_to_bin_spasm; do
+for entry in spasm_gcd spasm_int_sqrt spasm_bcd2bin spasm_hex_to_bin; do
     if nm "$kernel_build/vmlinux" 2>/dev/null | grep -q " T $entry$"; then
         :
     else

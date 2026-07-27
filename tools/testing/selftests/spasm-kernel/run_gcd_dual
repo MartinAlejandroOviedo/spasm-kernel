@@ -5,9 +5,9 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
 project_parent=$(CDPATH= cd -- "$kernel_src/.." && pwd)
-kernel_build=${KERNEL_BUILD:-"$project_parent/build-nice-dual-gcd"}
+kernel_build=${KERNEL_BUILD:-"$project_parent/build-spasm-kernel-dual"}
 spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
-host_tools="$kernel_src/tools/nice-kernel/host-tools"
+host_tools="$kernel_src/tools/spasm-kernel/host-tools"
 
 die()
 {
@@ -16,7 +16,7 @@ die()
 }
 
 [ -f "$kernel_build/.config" ] || die "falta configuracion dual"
-grep -q '^CONFIG_NICE_KERNEL_GCD_DUAL=y$' "$kernel_build/.config" ||
+grep -q '^CONFIG_SPASM_KERNEL_GCD_DUAL=y$' "$kernel_build/.config" ||
 	die "el build no selecciona el modo dual"
 
 PATH="$host_tools:$PATH" make -s -C "$kernel_src" O="$kernel_build" \
@@ -29,10 +29,10 @@ done
 echo "ok - dual_objects"
 
 nm "$kernel_build/lib/math/gcd.o" |
-	grep -Eq '[[:space:]]T[[:space:]]nice_gcd_c$' ||
+	grep -Eq '[[:space:]]T[[:space:]]spasm_gcd_c$' ||
 	die "la referencia C no fue aislada"
 nm "$kernel_build/lib/math/gcd_spasm.o" |
-	grep -Eq '[[:space:]]T[[:space:]]nice_gcd_spasm$' ||
+	grep -Eq '[[:space:]]T[[:space:]]spasm_gcd$' ||
 	die "la candidata SpASM no fue aislada"
 nm "$kernel_build/lib/math/gcd_dual.o" |
 	grep -Eq '[[:space:]]T[[:space:]]gcd$' ||
@@ -40,9 +40,9 @@ nm "$kernel_build/lib/math/gcd_dual.o" |
 echo "ok - dual_symbol_isolation"
 
 objdump -dr --disassemble=gcd "$kernel_build/lib/math/gcd_dual.o" |
-	grep -q 'nice_gcd_c' || die "el adaptador no llama a C"
+	grep -q 'spasm_gcd_c' || die "el adaptador no llama a C"
 objdump -dr --disassemble=gcd "$kernel_build/lib/math/gcd_dual.o" |
-	grep -q 'nice_gcd_spasm' || die "el adaptador no llama a SpASM"
+	grep -q 'spasm_gcd' || die "el adaptador no llama a SpASM"
 objdump -dr --disassemble=gcd "$kernel_build/lib/math/gcd_dual.o" |
 	grep -q 'lock incq' || die "el adaptador no contabiliza ejecuciones"
 echo "ok - dual_comparison_path"
@@ -54,8 +54,8 @@ if [ -f "$kernel_build/vmlinux" ]; then
 		die "vmlinux no exporta gcd"
 	echo "ok - dual_vmlinux_contract"
 	echo "1..4"
-	echo "# Nice Kernel gcd dual: CONFORME"
+	echo "# SpASM Kernel gcd dual: CONFORME"
 else
 	echo "1..3"
-	echo "# Nice Kernel gcd dual: objetos conformes; vmlinux aun no construido"
+	echo "# SpASM Kernel gcd dual: objetos conformes; vmlinux aun no construido"
 fi

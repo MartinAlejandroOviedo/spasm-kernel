@@ -4,7 +4,7 @@
 
 /*
  * Keep Linux's exported-symbol contract separate from the implementation.
- * With CONFIG_NICE_KERNEL_SPASM_GCD=y, gcd is a transparent assembly entry
+ * With CONFIG_SPASM_KERNEL_SPASM_GCD=y, gcd is a transparent assembly entry
  * that tail-calls the SpASM implementation.
  */
 EXPORT_SYMBOL_GPL(gcd);

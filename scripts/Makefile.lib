@@ -271,7 +271,7 @@ endef
 # of a developer's filesystem while allowing an explicit path to the compiler
 # script.
 SPASMC		   ?= spasmc
-SPASM_TARGET	   ?= nice-kernel-x86_64
+SPASM_TARGET	   ?= spasm-kernel-x86_64
 SPASM_TARGET_PATH ?= $(srctree)/tools/spasm-kernel
 
 spasm_asm = $(@:.o=.spasm.S)

@@ -4,5 +4,5 @@
 
 SYM_FUNC_START(int_sqrt)
 	ENDBR
-	jmp nice_int_sqrt_spasm
+	jmp spasm_int_sqrt
 SYM_FUNC_END(int_sqrt)

@@ -4,5 +4,5 @@
 
 SYM_FUNC_START(_bcd2bin)
 	ENDBR
-	jmp nice_bcd2bin_spasm
+	jmp spasm_bcd2bin
 SYM_FUNC_END(_bcd2bin)

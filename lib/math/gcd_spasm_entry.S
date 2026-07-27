@@ -8,5 +8,5 @@
  */
 SYM_FUNC_START(gcd)
 	ENDBR
-	jmp nice_gcd_spasm
+	jmp spasm_gcd
 SYM_FUNC_END(gcd)

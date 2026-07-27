@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
-target="$kernel_src/tools/spasm-kernel/spasm-target-nice-kernel-x86_64"
+target="$kernel_src/tools/spasm-kernel/spasm-target-spasm-kernel-x86_64"
 sample="$kernel_src/samples/spasm/hello_kmod.spasm"
 test_root=$(mktemp -d)
 trap 'rm -rf -- "$test_root"' EXIT
@@ -41,7 +41,7 @@ expect_success valid_module \
 	"$target" "$sample" --out-dir "$test_root/valid"
 test -s "$test_root/valid/spasm_hello_native.S"
 test -s "$test_root/valid/Makefile"
-if grep -q '^spasm_fn_nice_gcd:' \
+if grep -q '^spasm_fn_spasm_gcd:' \
 	"$test_root/valid/spasm_hello_native.S" &&
 	grep -q 'call gcd' "$test_root/valid/spasm_hello_native.S" &&
 	grep -q 'idivq' "$test_root/valid/spasm_hello_native.S"; then
@@ -62,9 +62,9 @@ fi
 expect_success builtin_export \
 	"$target" "$kernel_src/lib/math/gcd_spasm.spasm" \
 	--out "$test_root/gcd_spasm.S"
-if grep -q '^nice_gcd_spasm:' "$test_root/gcd_spasm.S" &&
+if grep -q '^spasm_gcd:' "$test_root/gcd_spasm.S" &&
 	grep -q '^[[:space:]]*divq %rcx' "$test_root/gcd_spasm.S" &&
-	! grep -q 'spasm_fn_nice_gcd_spasm\\|init_module\\|\\.modinfo' \
+	! grep -q 'spasm_fn_spasm_gcd\\|init_module\\|\\.modinfo' \
 		"$test_root/gcd_spasm.S"; then
 	echo "ok - builtin_preserves_selected_symbol"
 	pass=$((pass + 1))

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
-// Nice Kernel replacement for Linux hex_to_bin().
+// SpASM Kernel replacement for Linux hex_to_bin().
 
-export fn nice_hex_to_bin_spasm(ch: i32) -> i32 {
+export fn spasm_hex_to_bin(ch: i32) -> i32 {
 	var tmp: i32 = 0;
 	if (ch >= 48) {
 		if (ch <= 57) {

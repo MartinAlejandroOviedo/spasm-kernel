@@ -1,6 +1,6 @@
 # Auditoría SpASM — Estado de características (Fase 6)
 
-Compilador spasmc + backend nice-kernel-x86_64 (spasm-kmod-native.py)
+Compilador spasmc + backend spasm-kernel-x86_64 (spasm-kmod-native.py)
 Fecha: 2026-07-27
 
 ---
@@ -71,6 +71,6 @@ Fecha: 2026-07-27
 | Archivo | Rol |
 |---|---|
 | `tools/spasm-kernel/spasm-kmod-native.py` (1458 líneas) | Backend nativo: parser + codegen x86_64 |
-| `tools/spasm-kernel/spasm-target-nice-kernel-x86_64` (73 líneas) | Entry point para target externo |
+| `tools/spasm-kernel/spasm-target-spasm-kernel-x86_64` (73 líneas) | Entry point para target externo |
 | `~/Documentos/SpASM/tools/spasmc.py` (159 líneas) | Dispatcher central |
 | `~/Documentos/SpASM/tools/spasm-asm-gen.py` (2121 líneas) | Backend Linux userspace (str_slice, etc.) |

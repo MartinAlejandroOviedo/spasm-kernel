@@ -11,10 +11,10 @@
 #include <linux/limits.h>
 #include <linux/math.h>
 
-#include "int_sqrt_nice.h"
+#include "int_sqrt_spasm.h"
 
-#ifdef CONFIG_NICE_KERNEL_INT_SQRT_DUAL
-#define int_sqrt nice_int_sqrt_c
+#ifdef CONFIG_SPASM_KERNEL_INT_SQRT_DUAL
+#define int_sqrt spasm_int_sqrt_c
 #endif
 
 /**
@@ -44,7 +44,7 @@ unsigned long int_sqrt(unsigned long x)
 
 	return y;
 }
-#ifndef CONFIG_NICE_KERNEL_INT_SQRT_DUAL
+#ifndef CONFIG_SPASM_KERNEL_INT_SQRT_DUAL
 EXPORT_SYMBOL(int_sqrt);
 #endif
 

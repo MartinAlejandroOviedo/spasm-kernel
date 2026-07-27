@@ -4,5 +4,5 @@
 
 SYM_FUNC_START(hex_to_bin)
 	ENDBR
-	jmp nice_hex_to_bin_spasm
+	jmp spasm_hex_to_bin
 SYM_FUNC_END(hex_to_bin)

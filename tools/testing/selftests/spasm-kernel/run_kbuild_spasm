@@ -7,7 +7,7 @@ kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
 project_parent=$(CDPATH= cd -- "$kernel_src/.." && pwd)
 kernel_build=${KERNEL_BUILD:-"$project_parent/build-nice-spasm-gcd"}
 spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
-host_tools="$kernel_src/tools/nice-kernel/host-tools"
+host_tools="$kernel_src/tools/spasm-kernel/host-tools"
 object="$kernel_build/lib/math/gcd_spasm.o"
 assembly="$kernel_build/lib/math/gcd_spasm.spasm.S"
 command_file="$kernel_build/lib/math/.gcd_spasm.o.cmd"
@@ -70,8 +70,8 @@ touch -r "$test_root/command.timestamp" "$command_file"
 echo "ok - deterministic_rebuild"
 
 readelf -Ws "$object" |
-	grep -Eq 'GLOBAL[[:space:]]+DEFAULT.*[[:space:]]nice_gcd_spasm$' ||
-	die "nice_gcd_spasm no es GLOBAL DEFAULT"
+	grep -Eq 'GLOBAL[[:space:]]+DEFAULT.*[[:space:]]spasm_gcd$' ||
+	die "spasm_gcd no es GLOBAL DEFAULT"
 if readelf -Ws "$object" | grep -Eq '[[:space:]](init_module|cleanup_module)$'; then
 	die "el objeto builtin contiene simbolos reservados de modulo"
 fi

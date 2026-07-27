@@ -1,34 +1,34 @@
-# Contrato SpASM target Nice Kernel x86_64 v1
+# Contrato SpASM target SpASM Kernel x86_64 v1
 
 ## Objetivo
 
-Separar el consumidor Nice Kernel de la implementación provisional del backend.
+Separar el consumidor SpASM Kernel de la implementación provisional del backend.
 Kbuild y `tools/spasm-kernel/project` no deben conocer el parser ni el generador
 utilizados internamente.
 
 El identificador público del target es:
 
 ```text
-nice-kernel-x86_64
+spasm-kernel-x86_64
 ```
 
 ## Entrada oficial
 
-Nice Kernel registra el directorio del target mediante `SPASMC_TARGET_PATH` y
+SpASM Kernel registra el directorio del target mediante `SPASMC_TARGET_PATH` y
 compila siempre a través del dispatcher oficial:
 
 ```sh
 SPASMC_TARGET_PATH=tools/spasm-kernel \
     /home/martin/Documentos/SpASM/tools/spasmc.py \
     SOURCE.spasm \
-    --target nice-kernel-x86_64 \
+    --target spasm-kernel-x86_64 \
     --out-dir BUILD_DIR
 ```
 
 El dispatcher descubre esta entrada ejecutable:
 
 ```text
-tools/spasm-kernel/spasm-target-nice-kernel-x86_64
+tools/spasm-kernel/spasm-target-spasm-kernel-x86_64
 ```
 
 Opciones del target:
@@ -36,7 +36,7 @@ Opciones del target:
 - `SOURCE.spasm`: fuente obligatorio;
 - `--out-dir DIR`: directorio obligatorio para artefactos generados;
 - `--emit asm`: representación de salida; en v1 solamente `asm`;
-- `--target nice-kernel-x86_64`: comprobación opcional del identificador;
+- `--target spasm-kernel-x86_64`: comprobación opcional del identificador;
 - `--verbose`: muestra el backend ejecutado.
 
 ## Salidas

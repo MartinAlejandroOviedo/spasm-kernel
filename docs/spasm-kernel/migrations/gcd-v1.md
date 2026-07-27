@@ -6,7 +6,7 @@
 - Símbolo Linux: `gcd`
 - Exportación: `EXPORT_SYMBOL_GPL`
 - Implementación integrada: `gcd` en `lib/math/gcd_spasm.spasm`
-- Implementación comparativa: `nice_gcd` en `samples/spasm/hello_kmod.spasm`
+- Implementación comparativa: `spasm_gcd_internal` en `samples/spasm/hello_kmod.spasm`
 - Tipo ABI x86_64: `(usize, usize) -> usize`
 
 La implementación original no se retira: Kconfig permite seleccionar C o
@@ -14,7 +14,7 @@ SpASM durante la fase de estabilización.
 
 ## Estrategia
 
-Nice Kernel llama al símbolo original de Linux y a la implementación SpASM con
+SpASM Kernel llama al símbolo original de Linux y a la implementación SpASM con
 los mismos argumentos dentro del módulo cargado en Ring 0. Solamente registra
 éxito si cada resultado coincide con Linux y con el valor esperado.
 
@@ -39,14 +39,14 @@ compara la implementación generada con una referencia independiente.
 ## Selección de construcción
 
 ```text
-CONFIG_NICE_KERNEL_GCD_C=y
+CONFIG_SPASM_KERNEL_GCD_C=y
   -> lib/math/gcd.c
 
-CONFIG_NICE_KERNEL_SPASM_GCD=y
+CONFIG_SPASM_KERNEL_SPASM_GCD=y
   -> gcd_spasm.spasm + gcd_spasm_entry.S + gcd_export.c
 
-CONFIG_NICE_KERNEL_GCD_DUAL=y
-  -> gcd.c(nice_gcd_c) + gcd_spasm.spasm(nice_gcd_spasm) + gcd_dual.c
+CONFIG_SPASM_KERNEL_GCD_DUAL=y
+  -> gcd.c(spasm_gcd_c) + gcd_spasm.spasm(spasm_gcd) + gcd_dual.c
 ```
 
 En los tres modos existe un único símbolo público `gcd`. El modo dual llama a

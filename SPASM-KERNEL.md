@@ -1,8 +1,8 @@
-# Nice Kernel
+# SpASM Kernel
 
 **Filosofía:** *Machine and User Care.*
 
-Nice Kernel es el nombre de trabajo del proyecto. Su objetivo es construir un
+SpASM Kernel es el nombre de trabajo del proyecto. Su objetivo es construir un
 sistema que cuide tanto la máquina —estabilidad, recursos, diagnóstico y
 comportamiento predecible— como a la persona —control, claridad, seguridad y
 una experiencia comprensible—.
@@ -49,18 +49,18 @@ Comandos:
 Verificación reproducible del primer hito Ring 0:
 
 ```sh
-tools/nice-kernel/verify-poc
+tools/spasm-kernel/verify-poc
 ```
 
 La procedencia, versiones, hashes y criterio de aprobación están registrados
 en `NICE-KERNEL-PROVENANCE.md`.
 
 El backend nativo se consume mediante el contrato estable
-`nice-kernel-x86_64`, documentado en
-`docs/nice-kernel/spasm-target-v1.md`. Sus pruebas rápidas se ejecutan con:
+`spasm-kernel-x86_64`, documentado en
+`docs/spasm-kernel/spasm-target-v1.md`. Sus pruebas rápidas se ejecutan con:
 
 ```sh
-tools/testing/selftests/nice-kernel/run_backend_tests
+tools/testing/selftests/spasm-kernel/run_backend_tests
 ```
 
 El comando `project module` registra el target con `SPASMC_TARGET_PATH` y llama
@@ -92,7 +92,7 @@ El comando `test` acepta estas variables:
 ```sh
 SPASM_MODE=test
 SPASM_MESSAGE=Nice_Kernel_Machine_and_User_Care
-SPASM_HOSTNAME=nice-kernel
+SPASM_HOSTNAME=spasm-kernel
 SPASM_DELAY=0
 SPASM_DEBUG=0
 ```
@@ -119,7 +119,7 @@ mantener el arranque QEMU y la prueba del initramfs antes de integrarse.
   normalmente, aunque su implementación nativa provenga de SpASM.
 - **Migración verificable:** reemplazar componentes por módulos pequeños,
   reversibles y probados en x86_64.
-- **Identidad honesta:** distinguir el kernel Linux de base, Nice Kernel como
+- **Identidad honesta:** distinguir el kernel Linux de base, SpASM Kernel como
   proyecto y SpASM como lenguaje y compilador.
 
 El primer backend nativo admite el subconjunto de módulos con metadatos,
@@ -189,7 +189,7 @@ de este primer subconjunto.
 
 ## Funciones y tipos enteros
 
-El target `nice-kernel-x86_64` admite funciones internas puras con hasta seis
+El target `spasm-kernel-x86_64` admite funciones internas puras con hasta seis
 argumentos y retorno entero:
 
 ```text
@@ -217,7 +217,7 @@ el truncado y la comprobación de overflow para tipos menores quedan para la
 siguiente revisión del sistema de tipos.
 
 La primera equivalencia con código existente de Linux está documentada en
-`docs/nice-kernel/migrations/gcd-v1.md`.
+`docs/spasm-kernel/migrations/gcd-v1.md`.
 
 ## Funciones builtin reemplazables
 
@@ -226,7 +226,7 @@ el mismo núcleo en los modos directo y dual, `gcd` usa un nombre interno
 estable:
 
 ```text
-export fn nice_gcd_spasm(a: usize, b: usize) -> usize {
+export fn spasm_gcd(a: usize, b: usize) -> usize {
 	...
 }
 ```
@@ -237,15 +237,15 @@ preserva el símbolo público `gcd` en el modo directo; el comparador lo preserv
 en modo dual. La selección reversible se controla con un `choice` de Kconfig:
 
 ```text
-CONFIG_NICE_KERNEL_GCD_C=y       # implementación Linux original
-CONFIG_NICE_KERNEL_SPASM_GCD=y   # implementación SpASM
-CONFIG_NICE_KERNEL_GCD_DUAL=y    # ejecuta C y SpASM, retorna SpASM
+CONFIG_SPASM_KERNEL_GCD_C=y       # implementación Linux original
+CONFIG_SPASM_KERNEL_SPASM_GCD=y   # implementación SpASM
+CONFIG_SPASM_KERNEL_GCD_DUAL=y    # ejecuta C y SpASM, retorna SpASM
 ```
 
 Los tres modos preservan un único `GLOBAL FUNC` público llamado `gcd`. El modo
 dual contabiliza llamadas y divergencias y diagnostica resultados distintos
 con límite de tasa. Su contrato está en
-`docs/nice-kernel/spasm-migration-dual-v1.md`.
+`docs/spasm-kernel/spasm-migration-dual-v1.md`.
 
 Kbuild invoca al compilador propio mediante `SPASMC`; por ejemplo:
 
@@ -257,7 +257,7 @@ make O=/ruta/build ARCH=x86_64 \
 La equivalencia y una medición de host reproducible se ejecutan con:
 
 ```sh
-tools/testing/selftests/nice-kernel/run_gcd_equivalence
+tools/testing/selftests/spasm-kernel/run_gcd_equivalence
 ```
 
 Desde la Fase 3, cualquier objeto simple listado por Kbuild puede proceder de
@@ -271,15 +271,15 @@ La integración incremental, reproducibilidad y propiedades ELF se verifican
 con:
 
 ```sh
-tools/testing/selftests/nice-kernel/run_kbuild_spasm
+tools/testing/selftests/spasm-kernel/run_kbuild_spasm
 ```
 
 El contrato completo de esta integración está en
-`docs/nice-kernel/spasm-kbuild-v1.md`.
+`docs/spasm-kernel/spasm-kbuild-v1.md`.
 
-El build host necesita normalmente `bc`. Para entornos mínimos, Nice Kernel
+El build host necesita normalmente `bc`. Para entornos mínimos, SpASM Kernel
 incluye un reemplazo limitado exclusivamente a `kernel/time/timeconst.bc` en
-`tools/nice-kernel/host-tools`; no pretende ser una implementación general de
+`tools/spasm-kernel/host-tools`; no pretende ser una implementación general de
 `bc`.
 
 ## Contrato Linux–SpASM ABI v2
@@ -287,7 +287,7 @@ incluye un reemplazo limitado exclusivamente a `kernel/time/timeconst.bc` en
 La Fase 2 se especifica en:
 
 ```text
-docs/nice-kernel/spasm-linux-abi-v2.md
+docs/spasm-kernel/spasm-linux-abi-v2.md
 ```
 
 El contrato formaliza registros de argumentos y retorno, preservación de

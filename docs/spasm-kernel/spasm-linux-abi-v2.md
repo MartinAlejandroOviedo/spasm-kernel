@@ -2,12 +2,12 @@
 
 ## Estado y alcance
 
-Este documento es la norma ejecutable de Fase 2 para funciones de Nice Kernel
+Este documento es la norma ejecutable de Fase 2 para funciones de SpASM Kernel
 compiladas desde SpASM. Define qué debe observar Linux sin depender del lenguaje
 fuente. Aplica al target:
 
 ```text
-nice-kernel-x86_64
+spasm-kernel-x86_64
 ```
 
 V2 cubre funciones ordinarias incorporadas a `vmlinux` y el módulo comparativo
@@ -22,7 +22,7 @@ Módulo:
 ```sh
 SPASMC_TARGET_PATH=tools/spasm-kernel \
 	python3 /ruta/spasmc.py modulo.spasm \
-	--target nice-kernel-x86_64 --out-dir BUILD_DIR
+	--target spasm-kernel-x86_64 --out-dir BUILD_DIR
 ```
 
 Objeto builtin:
@@ -30,7 +30,7 @@ Objeto builtin:
 ```sh
 SPASMC_TARGET_PATH=tools/spasm-kernel \
 	python3 /ruta/spasmc.py funcion.spasm \
-	--target nice-kernel-x86_64 --out BUILD_DIR/funcion.S
+	--target spasm-kernel-x86_64 --out BUILD_DIR/funcion.S
 ```
 
 No existe fallback a C. Un error sintáctico, semántico o ABI produce estado
@@ -41,7 +41,7 @@ distinto de cero y no debe dejar un artefacto que parezca válido.
 Una función builtin publica exactamente el nombre declarado:
 
 ```text
-export fn nice_gcd_spasm(a: usize, b: usize) -> usize
+export fn spasm_gcd(a: usize, b: usize) -> usize
 ```
 
 Reglas:
@@ -58,7 +58,7 @@ Reglas:
 Una migración puede usar una entrada ABI mínima para desacoplar el nombre
 público Linux del núcleo reutilizable. En `gcd`, `gcd_spasm_entry.S` preserva
 el único símbolo público `gcd` y transfiere el control a
-`nice_gcd_spasm`. El modo dual reemplaza esa entrada por el comparador, sin
+`spasm_gcd`. El modo dual reemplaza esa entrada por el comparador, sin
 cambiar la firma observada por consumidores.
 
 ## Convención de llamada
@@ -141,7 +141,7 @@ No se aceptan excepciones para silenciar objtool en una función ordinaria.
 - Las llamadas internas resuelven a símbolos locales `spasm_fn_*`.
 - Una llamada Linux requiere `extern fn` y una firma incluida en la allowlist.
 - Una firma o símbolo no autorizado se rechaza antes de generar ensamblador.
-- Para el núcleo `nice_gcd_spasm`, las únicas relocaciones de texto esperadas
+- Para el núcleo `spasm_gcd`, las únicas relocaciones de texto esperadas
   son las del `RET` del kernel hacia `__x86_return_thunk`.
 - No se permiten relocaciones absolutas en `.text`.
 

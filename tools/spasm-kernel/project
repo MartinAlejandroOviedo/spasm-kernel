@@ -11,7 +11,7 @@ initramfs="$kernel_build/spasm-initramfs.cpio.gz"
 bzimage="$kernel_build/arch/x86/boot/bzImage"
 module_build="$kernel_build/spasm-modules/hello"
 spasm_module="$module_build/spasm_hello.ko"
-host_tools="$kernel_src/tools/nice-kernel/host-tools"
+host_tools="$kernel_src/tools/spasm-kernel/host-tools"
 
 die()
 {
@@ -26,7 +26,7 @@ need_file()
 
 show_status()
 {
-	echo "Proyecto:  Nice Kernel"
+	echo "Proyecto:  SpASM Kernel"
 	echo "Filosofia: Machine and User Care"
 	echo "Fuentes:   $kernel_src"
 	echo "Build:     $kernel_build"
@@ -88,7 +88,7 @@ build_module()
 	SPASMC_TARGET_PATH="$kernel_src/tools/spasm-kernel" \
 		python3 "$spasmc" \
 		"$kernel_src/samples/spasm/hello_kmod.spasm" \
-		--target nice-kernel-x86_64 \
+		--target spasm-kernel-x86_64 \
 		--out-dir "$module_build"
 	make -C "$kernel_src" O="$kernel_build" ARCH=x86_64 \
 		M="$module_build" modules
@@ -103,8 +103,8 @@ test_kernel()
 	build_initramfs
 
 	mode=${SPASM_MODE:-test}
-	message=${SPASM_MESSAGE:-Nice_Kernel_Machine_and_User_Care}
-	hostname=${SPASM_HOSTNAME:-nice-kernel}
+	message=${SPASM_MESSAGE:-SpASM_Kernel_Machine_and_User_Care}
+	hostname=${SPASM_HOSTNAME:-spasm-kernel}
 	delay=${SPASM_DELAY:-0}
 	debug=${SPASM_DEBUG:-0}
 
@@ -130,19 +130,19 @@ show_spasm_info()
 verify_abi()
 {
 	KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
-		"$kernel_src/tools/testing/selftests/nice-kernel/run_abi_conformance"
+		"$kernel_src/tools/testing/selftests/spasm-kernel/run_abi_conformance"
 }
 
 verify_kbuild()
 {
 	KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
-		"$kernel_src/tools/testing/selftests/nice-kernel/run_kbuild_spasm"
+		"$kernel_src/tools/testing/selftests/spasm-kernel/run_kbuild_spasm"
 }
 
 verify_dual()
 {
 	KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
-		"$kernel_src/tools/testing/selftests/nice-kernel/run_gcd_dual"
+		"$kernel_src/tools/testing/selftests/spasm-kernel/run_gcd_dual"
 }
 
 usage()
