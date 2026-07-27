@@ -15,7 +15,7 @@ HEADER_RE = re.compile(
     r'^\s*(module|license|author|description)\s+"((?:[^"\\]|\\.)*)"\s*$'
 )
 KLOG_RE = re.compile(r'klog\s*\(\s*"((?:[^"\\]|\\.)*)"\s*\)')
-RETURN_RE = re.compile(r"return\s+(-?[0-9]+)")
+RETURN_RE = re.compile(r"return\s+([^;{}\n]+)\s*;?")
 RESOURCE_RE = re.compile(
     r"recurso\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
     r"kalloc<u8>\(\s*([0-9]+)\s*\)\s+else\s+return\s+(-?[A-Za-z0-9_]+)"
@@ -68,9 +68,13 @@ CALL_RE = re.compile(
     r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)\s*$"
 )
 FUNCTION_HEAD_RE = re.compile(
-    r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)\s*"
+    r"\b(?:(export)\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)\s*"
     r"->\s*([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)"
     r"\s*\{"
+)
+EXTERN_FUNCTION_RE = re.compile(
+    r"\bextern\s+fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)\s*"
+    r"->\s*([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)"
 )
 PARAM_RE = re.compile(
     r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
@@ -97,6 +101,10 @@ TYPE_WIDTHS = {
     "usize": 8,
     "isize": 8,
 }
+ABI_V2_EXPORTED_TYPES = {"u64", "i64", "usize", "isize"}
+KERNEL_EXTERN_ALLOWLIST = {
+    "gcd": (("usize", "usize"), "usize"),
+}
 
 
 def decode_string(value):
@@ -121,17 +129,67 @@ def asm_string(value):
     return "".join(escaped)
 
 
-def parse_source(source):
+def parse_source(source, kind="module"):
     metadata = {}
     block_texts, source_without_blocks = extract_on_blocks(source)
     functions, source_without_blocks = extract_functions(source_without_blocks)
+    externs, source_without_blocks = extract_externs(source_without_blocks)
+    functions.extend(externs)
+    function_names = [function["name"] for function in functions]
+    if len(function_names) != len(set(function_names)):
+        raise CompileError("funcion interna o externa duplicada")
     function_signatures = {
         function["name"]: function for function in functions
     }
+    for function in functions:
+        if not function.get("exported"):
+            continue
+        if kind != "builtin":
+            raise CompileError(
+                "export fn solo se admite en objetos builtin"
+            )
+        if function["name"] in ("init_module", "cleanup_module"):
+            raise CompileError(
+                f"simbolo exportado reservado: {function['name']}"
+            )
+        abi_types = [
+            param_type for _param_name, param_type in function["params"]
+        ]
+        abi_types.append(function["return_type"])
+        for type_name in abi_types:
+            if (
+                type_name not in ABI_V2_EXPORTED_TYPES
+                and not is_pointer_type(type_name)
+            ):
+                raise CompileError(
+                    f"export fn {function['name']}: {type_name} "
+                    "no tiene representacion ABI v2 estable"
+                )
+    for function in functions:
+        if function.get("external"):
+            continue
+        function["statements"] = parse_statements(
+            function.pop("body"),
+            "function",
+            variables=dict(function["params"]),
+            functions=function_signatures,
+            return_type=function["return_type"],
+        )
+        if not any(
+            statement[0] == "return_expr"
+            for statement in function["statements"]
+        ):
+            raise CompileError(
+                f"funcion {function['name']}: falta return"
+            )
 
     for line_number, line in enumerate(source_without_blocks.splitlines(), 1):
         if not line.strip() or line.lstrip().startswith(("#", "//")):
             continue
+        if kind == "builtin":
+            raise CompileError(
+                f"linea {line_number}: declaracion no soportada en objeto builtin"
+            )
         match = HEADER_RE.match(line)
         if not match:
             raise CompileError(f"linea {line_number}: declaracion no soportada")
@@ -140,11 +198,14 @@ def parse_source(source):
             raise CompileError(f"linea {line_number}: {key} duplicado")
         metadata[key] = decode_string(value)
 
-    for required in ("module", "license"):
-        if not metadata.get(required):
-            raise CompileError(f"falta declaracion {required}")
-    if not NAME_RE.match(metadata["module"]):
-        raise CompileError("nombre de modulo invalido")
+    if kind == "module":
+        for required in ("module", "license"):
+            if not metadata.get(required):
+                raise CompileError(f"falta declaracion {required}")
+        if not NAME_RE.match(metadata["module"]):
+            raise CompileError("nombre de modulo invalido")
+    elif not any(function.get("exported") for function in functions):
+        raise CompileError("objeto builtin sin funciones exportadas")
 
     blocks = {}
     for kind, body in block_texts:
@@ -154,9 +215,15 @@ def parse_source(source):
             body, kind, functions=function_signatures
         )
 
-    if "load" not in blocks or "unload" not in blocks:
+    if kind == "module" and ("load" not in blocks or "unload" not in blocks):
         raise CompileError("se requieren bloques on load y on unload")
-    return metadata, blocks, functions
+    if kind == "builtin" and blocks:
+        raise CompileError("un objeto builtin no admite bloques on load/on unload")
+    return (
+        metadata,
+        blocks,
+        [function for function in functions if not function.get("external")],
+    )
 
 
 def find_closing_brace(text, open_index):
@@ -213,7 +280,7 @@ def extract_functions(source):
         match = FUNCTION_HEAD_RE.search(source, position)
         if not match:
             break
-        name, params_text, return_type = match.groups()
+        exported, name, params_text, return_type = match.groups()
         if name in names:
             raise CompileError(f"funcion duplicada: {name}")
         if not is_supported_type(return_type):
@@ -243,22 +310,13 @@ def extract_functions(source):
         open_index = match.end() - 1
         close_index = find_closing_brace(source, open_index)
         body = source[open_index + 1 : close_index]
-        return_match = re.fullmatch(
-            r"\s*return\s+([^;{}]+)\s*;?\s*", body
-        )
-        if not return_match:
-            raise CompileError(
-                f"funcion {name}: v1 requiere exactamente un return"
-            )
-        variable_types = dict(params)
-        expression = parse_expression(return_match.group(1), variable_types)
-        validate_expression_type(expression, variable_types, return_type)
         functions.append(
             {
                 "name": name,
                 "params": params,
                 "return_type": return_type,
-                "expression": expression,
+                "body": body,
+                "exported": bool(exported),
             }
         )
         names.add(name)
@@ -268,6 +326,69 @@ def extract_functions(source):
     for start, end in spans:
         remaining[start:end] = " " * (end - start)
     return functions, "".join(remaining)
+
+
+def parse_parameters(name, params_text):
+    params = []
+    param_names = set()
+    if not params_text.strip():
+        return params
+    for raw_param in params_text.split(","):
+        param_match = PARAM_RE.match(raw_param)
+        if not param_match:
+            raise CompileError(
+                f"parametro invalido en funcion {name}: {raw_param.strip()}"
+            )
+        param_name, param_type = param_match.groups()
+        if not is_supported_type(param_type):
+            raise CompileError(f"tipo de parametro no soportado: {param_type}")
+        if param_name in param_names:
+            raise CompileError(
+                f"parametro duplicado en funcion {name}: {param_name}"
+            )
+        param_names.add(param_name)
+        params.append((param_name, param_type))
+    if len(params) > len(ARG_REGISTERS):
+        raise CompileError(f"funcion {name}: maximo 6 parametros")
+    return params
+
+
+def extract_externs(source):
+    externs = []
+    spans = []
+    position = 0
+    while True:
+        match = EXTERN_FUNCTION_RE.search(source, position)
+        if not match:
+            break
+        name, params_text, return_type = match.groups()
+        params = parse_parameters(name, params_text)
+        signature = (
+            tuple(param_type for _param_name, param_type in params),
+            return_type,
+        )
+        allowed = KERNEL_EXTERN_ALLOWLIST.get(name)
+        if allowed is None:
+            raise CompileError(f"funcion externa no autorizada: {name}")
+        if signature != allowed:
+            raise CompileError(
+                f"firma externa no autorizada para {name}: {signature}"
+            )
+        externs.append(
+            {
+                "name": name,
+                "params": params,
+                "return_type": return_type,
+                "external": True,
+            }
+        )
+        end = match.end()
+        spans.append((match.start(), end))
+        position = end
+    remaining = list(source)
+    for start, end in spans:
+        remaining[start:end] = " " * (end - start)
+    return externs, "".join(remaining)
 
 
 def parse_errno(value):
@@ -428,7 +549,13 @@ def parse_value_expression(value, variables, functions, expected_type):
                 f"se esperaba {param_type}"
             )
         args.append(operand)
-    return ("call", function_name, tuple(args), function["return_type"])
+    return (
+        "call",
+        function_name,
+        tuple(args),
+        function["return_type"],
+        function.get("external", False),
+    )
 
 
 def parse_condition(value, variables):
@@ -472,6 +599,7 @@ def parse_statements(
     nested=False,
     loop_counter=None,
     functions=None,
+    return_type=None,
 ):
     variables = {} if variables is None else dict(variables)
     resources = {} if resources is None else dict(resources)
@@ -512,6 +640,7 @@ def parse_statements(
                 nested=True,
                 loop_counter=loop_counter,
                 functions=functions,
+                return_type=return_type,
             )
             statements.append(("while", loop_id, condition, loop_statements))
             position = close_index + 1
@@ -537,6 +666,7 @@ def parse_statements(
                     nested=True,
                     loop_counter=loop_counter,
                     functions=functions,
+                    return_type=return_type,
                 )
                 next_position = else_close + 1
             then_statements = parse_statements(
@@ -547,6 +677,7 @@ def parse_statements(
                 nested=True,
                 loop_counter=loop_counter,
                 functions=functions,
+                return_type=return_type,
             )
             statements.append(("if", condition, then_statements, else_statements))
             position = next_position
@@ -692,9 +823,18 @@ def parse_statements(
                     statement[2] = replacement
                     statements[-1] = tuple(statement)
             else:
-                if nested:
+                if block_kind == "function":
+                    expression = parse_value_expression(
+                        values[0],
+                        variables,
+                        functions,
+                        return_type,
+                    )
+                    statements.append(("return_expr", expression, return_type))
+                elif nested:
                     raise CompileError("return dentro de if aun no soportado")
-                statements.append(("return", int(values[0])))
+                else:
+                    statements.append(("return", parse_errno(values[0].strip())))
                 if body[position:].strip():
                     raise CompileError("sentencias despues de return")
             break
@@ -761,6 +901,10 @@ def has_division(statements):
     for statement in statements:
         if statement[0] in ("var", "assign"):
             expression = statement[2]
+            if len(expression) == 3 and expression[1] in ("/", "%"):
+                return True
+        elif statement[0] == "return_expr":
+            expression = statement[1]
             if len(expression) == 3 and expression[1] in ("/", "%"):
                 return True
         elif statement[0] == "if":
@@ -935,6 +1079,7 @@ def emit_expression(
     slots,
     arithmetic_error_label,
     memory_error_label=None,
+    value_type="i64",
 ):
     if expression[0] == "load":
         _kind, resource_name, offset, type_name, capacity = expression
@@ -949,10 +1094,11 @@ def emit_expression(
         )
         return
     if expression[0] == "call":
-        _kind, function_name, arguments, _return_type = expression
+        _kind, function_name, arguments, _return_type, external = expression
         for operand, register in zip(arguments, ARG_REGISTERS):
             emit_load_operand(lines, operand, slots, register)
-        lines.append(f"\tcall spasm_fn_{function_name}")
+        symbol = function_name if external else f"spasm_fn_{function_name}"
+        lines.append(f"\tcall {symbol}")
         return
     emit_load_operand(lines, expression[0], slots, "rax")
     if len(expression) == 3:
@@ -969,10 +1115,12 @@ def emit_expression(
                 [
                     "\ttestq %rcx, %rcx",
                     f"\tje {arithmetic_error_label}",
-                    "\tcqto",
-                    "\tidivq %rcx",
                 ]
             )
+            if value_type in ("u8", "u16", "u32", "u64", "usize"):
+                lines.extend(["\txorl %edx, %edx", "\tdivq %rcx"])
+            else:
+                lines.extend(["\tcqto", "\tidivq %rcx"])
             if operator == "%":
                 lines.append("\tmovq %rdx, %rax")
 
@@ -988,64 +1136,43 @@ def inverse_jump(comparator):
     }[comparator]
 
 
-def emit_native_function(lines, function):
-    name = function["name"]
-    params = function["params"]
-    expression = function["expression"]
-    slots = {
-        param_name: -8 * (index + 1)
-        for index, (param_name, _param_type) in enumerate(params)
-    }
-    stack_size = ((len(slots) * 8 + 15) // 16) * 16
-    arithmetic_error_label = f".Lspasm_fn_{name}_arithmetic_error"
-    lines.extend(
-        [
-            '.section .text.spasm,"ax"',
-            f".type spasm_fn_{name}, @function",
-            f"spasm_fn_{name}:",
-            "\tpushq %rbp",
-            "\tmovq %rsp, %rbp",
-        ]
+def emit_native_function(lines, function, builtin=False):
+    emit_function(
+        lines,
+        function["name"]
+        if function.get("exported")
+        else f"spasm_fn_{function['name']}",
+        function["statements"],
+        ".text" if builtin else ".spasm",
+        params=function["params"],
+        global_symbol=function.get("exported", False),
     )
-    if stack_size:
-        lines.append(f"\tsubq ${stack_size}, %rsp")
-    for (param_name, _param_type), register in zip(params, ARG_REGISTERS):
-        lines.append(f"\tmovq %{register}, {slots[param_name]}(%rbp)")
-    emit_expression(lines, expression, slots, arithmetic_error_label)
-    if stack_size:
-        lines.append(f"\taddq ${stack_size}, %rsp")
-    lines.extend(["\tpopq %rbp", "\tRET"])
-    if len(expression) == 3 and expression[1] in ("/", "%"):
-        lines.extend(
-            [
-                f"{arithmetic_error_label}:",
-                "\tmovq $-33, %rax",
-                f"\taddq ${stack_size}, %rsp" if stack_size else "",
-                "\tpopq %rbp",
-                "\tRET",
-            ]
-        )
-    lines.extend([f".size spasm_fn_{name}, .-spasm_fn_{name}", ""])
 
 
-def emit_function(lines, name, statements, prefix):
+def emit_function(
+    lines, name, statements, prefix, params=(), global_symbol=True
+):
     resources = collect_resources(statements)
     variables = collect_variables(statements)
     loop_ids = collect_loop_ids(statements)
     loop_slots = [f"__loop_budget_{loop_id}" for loop_id in loop_ids]
-    slot_names = resources + variables + loop_slots
+    param_names = [param_name for param_name, _param_type in params]
+    slot_names = resources + param_names + variables + loop_slots
     if len(slot_names) != len(set(slot_names)):
         raise CompileError("colision de nombres entre variables o recursos")
     slots = {
         slot_name: -8 * (index + 1) for index, slot_name in enumerate(slot_names)
     }
     stack_size = ((len(slot_names) * 8 + 15) // 16) * 16
+    section = ".text" if prefix == ".text" else f"{prefix}.text"
     lines.extend(
         [
-            f'.section {prefix}.text,"ax"',
-            f".globl {name}",
+            f'.section {section},"ax"',
+            ".p2align 4, 0x90",
+            f".{'globl' if global_symbol else 'local'} {name}",
             f".type {name}, @function",
             f"{name}:",
+            "\tENDBR",
             "\tpushq %rbp",
             "\tmovq %rsp, %rbp",
         ]
@@ -1054,6 +1181,8 @@ def emit_function(lines, name, statements, prefix):
         lines.append(f"\tsubq ${stack_size}, %rsp")
     for offset in slots.values():
         lines.append(f"\tmovq $0, {offset}(%rbp)")
+    for (param_name, _param_type), register in zip(params, ARG_REGISTERS):
+        lines.append(f"\tmovq %{register}, {slots[param_name]}(%rbp)")
 
     active = []
     message_index = [0]
@@ -1133,13 +1262,14 @@ def emit_function(lines, name, statements, prefix):
                 memory_error_label,
             )
         elif statement_kind in ("var", "assign"):
-            variable_name, expression = statement[1:3]
+            variable_name, expression, value_type = statement[1:4]
             emit_expression(
                 lines,
                 expression,
                 slots,
                 arithmetic_error_label,
                 memory_error_label,
+                value_type,
             )
             lines.append(f"\tmovq %rax, {slots[variable_name]}(%rbp)")
         elif statement_kind == "if":
@@ -1184,6 +1314,21 @@ def emit_function(lines, name, statements, prefix):
             )
             emit_statement_list(loop_statements)
             lines.extend([f"\tjmp {head_label}", f"{end_label}:"])
+        elif statement_kind == "return_expr":
+            expression, value_type = statement[1:3]
+            emit_expression(
+                lines,
+                expression,
+                slots,
+                arithmetic_error_label,
+                memory_error_label,
+                value_type,
+            )
+            emit_cleanup(lines, active, slots)
+            if stack_size:
+                lines.append(f"\taddq ${stack_size}, %rsp")
+            lines.extend(["\tpopq %rbp", "\tRET"])
+            returned = True
         else:
             emit_return(lines, active, slots, statement[1], stack_size)
             returned = True
@@ -1203,7 +1348,7 @@ def emit_function(lines, name, statements, prefix):
     lines.extend([f".size {name}, .-{name}", ""])
 
 
-def emit_assembly(metadata, blocks, functions):
+def emit_assembly(metadata, blocks, functions, kind="module"):
     lines = [
         "/* Generated from SpASM; native Linux kernel x86_64 backend. */",
         "#include <asm/nospec-branch.h>",
@@ -1211,9 +1356,37 @@ def emit_assembly(metadata, blocks, functions):
         "",
     ]
     for function in functions:
-        emit_native_function(lines, function)
-    emit_function(lines, "init_module", blocks["load"], ".init")
-    emit_function(lines, "cleanup_module", blocks["unload"], ".exit")
+        emit_native_function(lines, function, builtin=kind == "builtin")
+    if kind == "builtin":
+        lines.extend(
+            [
+                '.section .note.GNU-stack,"",@progbits',
+                "",
+            ]
+        )
+        return "\n".join(lines)
+    emit_function(lines, "spasm_module_init", blocks["load"], ".init")
+    lines.extend(
+        [
+            ".globl init_module",
+            ".set init_module, spasm_module_init",
+            '.section .init.data,"aw"',
+            ".Lspasm_init_addressable:",
+            "\t.quad init_module",
+            "",
+        ]
+    )
+    emit_function(lines, "spasm_module_exit", blocks["unload"], ".exit")
+    lines.extend(
+        [
+            ".globl cleanup_module",
+            ".set cleanup_module, spasm_module_exit",
+            '.section .exit.data,"aw"',
+            ".Lspasm_exit_addressable:",
+            "\t.quad cleanup_module",
+            "",
+        ]
+    )
     lines.extend(['.section .rodata.str1.1,"aMS",@progbits,1'])
     for prefix, statements in ((".init", blocks["load"]), (".exit", blocks["unload"])):
         messages = collect_messages(statements)
@@ -1252,19 +1425,28 @@ def main():
     )
     parser.add_argument("source", type=pathlib.Path)
     parser.add_argument("--out-dir", required=True, type=pathlib.Path)
+    parser.add_argument(
+        "--kind", choices=("module", "builtin"), default="module"
+    )
     args = parser.parse_args()
 
     try:
         source = args.source.read_text(encoding="utf-8")
-        metadata, blocks, functions = parse_source(source)
+        metadata, blocks, functions = parse_source(source, kind=args.kind)
         args.out_dir.mkdir(parents=True, exist_ok=True)
-        module_name = metadata["module"]
-        asm_path = args.out_dir / f"{module_name}_native.S"
-        makefile_path = args.out_dir / "Makefile"
-        asm_path.write_text(
-            emit_assembly(metadata, blocks, functions), encoding="utf-8"
+        module_name = (
+            metadata["module"] if args.kind == "module" else args.source.stem
         )
-        makefile_path.write_text(emit_makefile(module_name), encoding="utf-8")
+        asm_path = args.out_dir / f"{module_name}_native.S"
+        asm_path.write_text(
+            emit_assembly(metadata, blocks, functions, kind=args.kind),
+            encoding="utf-8",
+        )
+        if args.kind == "module":
+            makefile_path = args.out_dir / "Makefile"
+            makefile_path.write_text(
+                emit_makefile(module_name), encoding="utf-8"
+            )
         print(asm_path)
     except (OSError, CompileError) as exc:
         print(f"spasm-kmod-native: error: {exc}", file=sys.stderr)

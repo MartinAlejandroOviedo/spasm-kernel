@@ -1,4 +1,29 @@
 # SPDX-License-Identifier: GPL-2.0-only
+choice
+	prompt "Nice Kernel gcd implementation"
+	default NICE_KERNEL_GCD_C
+	depends on X86_64
+
+config NICE_KERNEL_GCD_C
+	bool "Original Linux C implementation"
+
+config NICE_KERNEL_SPASM_GCD
+	bool "SpASM implementation"
+	help
+	  Build the kernel's gcd() implementation from SpASM while preserving
+	  the existing Linux x86_64 ABI and exported symbol.
+
+	  This is the first reversible function migration for Nice Kernel.
+
+config NICE_KERNEL_GCD_DUAL
+	bool "Dual C/SpASM comparison"
+	help
+	  Execute the original C implementation and the SpASM implementation
+	  for every gcd() call. Return the SpASM result and report any mismatch.
+	  This mode is intended for migration validation, not production.
+
+endchoice
+
 config CORDIC
 	tristate "CORDIC algorithm"
 	help

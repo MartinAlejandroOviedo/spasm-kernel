@@ -3,6 +3,12 @@
 #include <linux/gcd.h>
 #include <linux/export.h>
 
+#include "gcd_nice.h"
+
+#ifdef CONFIG_NICE_KERNEL_GCD_DUAL
+#define gcd nice_gcd_c
+#endif
+
 /*
  * This implements the binary GCD algorithm. (Often attributed to Stein,
  * but as Knuth has noted, appears in a first-century Chinese math text.)
@@ -85,4 +91,6 @@ unsigned long gcd(unsigned long a, unsigned long b)
 	}
 }
 
+#ifndef CONFIG_NICE_KERNEL_GCD_DUAL
 EXPORT_SYMBOL_GPL(gcd);
+#endif

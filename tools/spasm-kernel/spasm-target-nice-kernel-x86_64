@@ -17,7 +17,9 @@ def parser():
         description="Compila un módulo SpASM nativo para Nice Kernel x86_64.",
     )
     command.add_argument("source", type=Path, help="fuente .spasm")
-    command.add_argument("--out-dir", type=Path, required=True)
+    output = command.add_mutually_exclusive_group(required=True)
+    output.add_argument("--out-dir", type=Path)
+    output.add_argument("--out", type=Path)
     command.add_argument("--emit", choices=("asm",), default="asm")
     command.add_argument("--target", choices=(TARGET,), default=TARGET)
     command.add_argument("--verbose", action="store_true")
@@ -32,7 +34,8 @@ def fail(message):
 def main(argv=None):
     args = parser().parse_args(argv)
     source = args.source.resolve()
-    out_dir = args.out_dir.resolve()
+    out_dir = args.out_dir.resolve() if args.out_dir else None
+    out_file = args.out.resolve() if args.out else None
 
     if source.suffix != ".spasm":
         return fail(f"la fuente debe terminar en .spasm: {source}")
@@ -45,12 +48,25 @@ def main(argv=None):
         sys.executable,
         str(BACKEND),
         str(source),
-        "--out-dir",
-        str(out_dir),
     ]
+    if out_dir:
+        command.extend(["--out-dir", str(out_dir)])
+    else:
+        command.extend(
+            ["--out-dir", str(out_file.parent), "--kind", "builtin"]
+        )
     if args.verbose:
         print("+ " + " ".join(command), file=sys.stderr)
-    return subprocess.run(command, check=False).returncode
+    result = subprocess.run(command, check=False)
+    if result.returncode == 0 and out_file:
+        generated = out_file.parent / f"{source.stem}_native.S"
+        if not generated.is_file():
+            return fail(f"el backend no genero la salida esperada: {generated}")
+        generated.replace(out_file)
+        makefile = out_file.parent / "Makefile"
+        if makefile.exists():
+            makefile.unlink()
+    return result.returncode
 
 
 if __name__ == "__main__":

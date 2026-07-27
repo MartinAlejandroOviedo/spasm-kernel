@@ -11,6 +11,7 @@ initramfs="$kernel_build/spasm-initramfs.cpio.gz"
 bzimage="$kernel_build/arch/x86/boot/bzImage"
 module_build="$kernel_build/spasm-modules/hello"
 spasm_module="$module_build/spasm_hello.ko"
+host_tools="$kernel_src/tools/nice-kernel/host-tools"
 
 die()
 {
@@ -61,16 +62,21 @@ configure_kernel()
 build_kernel()
 {
 	[ -f "$kernel_build/.config" ] || configure_kernel
-	make -C "$kernel_src" O="$kernel_build" ARCH=x86_64 -j"${JOBS:-8}"
+	PATH="$host_tools:$PATH" \
+		make -C "$kernel_src" O="$kernel_build" ARCH=x86_64 \
+		SPASMC="$spasmc" -j"${JOBS:-8}"
 }
 
 build_initramfs()
 {
+	base_initramfs="$project_parent/build-x86_64-baseline/spasm-initramfs.cpio.gz"
 	if [ -f "$spasm_module" ]; then
 		SPASM_MODULE="$spasm_module" \
+			BASE_INITRAMFS="$base_initramfs" \
 			"$kernel_src/tools/spasm-initramfs/build.sh" "$initramfs"
 	else
-		"$kernel_src/tools/spasm-initramfs/build.sh" "$initramfs"
+		BASE_INITRAMFS="$base_initramfs" \
+			"$kernel_src/tools/spasm-initramfs/build.sh" "$initramfs"
 	fi
 }
 
@@ -121,9 +127,27 @@ show_spasm_info()
 	python3 "$spasmc" --help
 }
 
+verify_abi()
+{
+	KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
+		"$kernel_src/tools/testing/selftests/nice-kernel/run_abi_conformance"
+}
+
+verify_kbuild()
+{
+	KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
+		"$kernel_src/tools/testing/selftests/nice-kernel/run_kbuild_spasm"
+}
+
+verify_dual()
+{
+	KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
+		"$kernel_src/tools/testing/selftests/nice-kernel/run_gcd_dual"
+}
+
 usage()
 {
-	echo "Uso: tools/spasm-kernel/project {status|config|build|module|initramfs|test|spasm-info}"
+	echo "Uso: tools/spasm-kernel/project {status|config|build|module|initramfs|test|abi-test|kbuild-test|dual-test|spasm-info}"
 }
 
 case "${1:-}" in
@@ -133,6 +157,9 @@ build) build_kernel ;;
 module) build_module ;;
 initramfs) build_initramfs ;;
 test) test_kernel ;;
+abi-test) verify_abi ;;
+kbuild-test) verify_kbuild ;;
+dual-test) verify_dual ;;
 spasm-info) show_spasm_info ;;
 *) usage; exit 2 ;;
 esac

@@ -264,6 +264,31 @@ define rule_as_o_S
 	$(call cmd,warn_shared_object)
 endef
 
+# Compile SpASM sources (.spasm)
+# ---------------------------------------------------------------------------
+#
+# SPASMC is deliberately supplied by the caller. This keeps Kbuild independent
+# of a developer's filesystem while allowing an explicit path to the compiler
+# script.
+SPASMC		   ?= spasmc
+SPASM_TARGET	   ?= nice-kernel-x86_64
+SPASM_TARGET_PATH ?= $(srctree)/tools/spasm-kernel
+
+spasm_asm = $(@:.o=.spasm.S)
+
+quiet_cmd_spasm_o = SPASM $(quiet_modtag) $@
+      cmd_spasm_o = SPASMC_TARGET_PATH=$(SPASM_TARGET_PATH) \
+		    $(PYTHON3) $(SPASMC) $< --target $(SPASM_TARGET) \
+		    --out $(spasm_asm) && \
+		    $(CC) $(a_flags) -c -o $@ $(spasm_asm) $(cmd_objtool)
+
+define rule_spasm_o
+	$(call cmd_and_fixdep,spasm_o)
+	$(call cmd,gen_objtooldep)
+	$(call cmd,gen_symversions_S)
+	$(call cmd,warn_shared_object)
+endef
+
 # Copy a file
 # ===========================================================================
 # 'cp' preserves permissions. If you use it to copy a file in read-only srctree,

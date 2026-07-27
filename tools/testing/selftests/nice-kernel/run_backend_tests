@@ -41,6 +41,16 @@ expect_success valid_module \
 	"$target" "$sample" --out-dir "$test_root/valid"
 test -s "$test_root/valid/spasm_hello_native.S"
 test -s "$test_root/valid/Makefile"
+if grep -q '^spasm_fn_nice_gcd:' \
+	"$test_root/valid/spasm_hello_native.S" &&
+	grep -q 'call gcd' "$test_root/valid/spasm_hello_native.S" &&
+	grep -q 'idivq' "$test_root/valid/spasm_hello_native.S"; then
+	echo "ok - full_function_and_linux_gcd_equivalence_emitted"
+	pass=$((pass + 1))
+else
+	echo "not ok - full_function_and_linux_gcd_equivalence_emitted"
+	fail=$((fail + 1))
+fi
 if find "$test_root/valid" -type f -name '*.c' | grep -q .; then
 	echo "not ok - native_output_contains_no_c"
 	fail=$((fail + 1))
@@ -48,6 +58,52 @@ else
 	echo "ok - native_output_contains_no_c"
 	pass=$((pass + 1))
 fi
+
+expect_success builtin_export \
+	"$target" "$kernel_src/lib/math/gcd_spasm.spasm" \
+	--out "$test_root/gcd_spasm.S"
+if grep -q '^nice_gcd_spasm:' "$test_root/gcd_spasm.S" &&
+	grep -q '^[[:space:]]*divq %rcx' "$test_root/gcd_spasm.S" &&
+	! grep -q 'spasm_fn_nice_gcd_spasm\\|init_module\\|\\.modinfo' \
+		"$test_root/gcd_spasm.S"; then
+	echo "ok - builtin_preserves_selected_symbol"
+	pass=$((pass + 1))
+else
+	echo "not ok - builtin_preserves_selected_symbol"
+	fail=$((fail + 1))
+fi
+
+printf '%s\n' \
+	'fn internal_only(a: usize) -> usize { return a; }' \
+	>"$test_root/no_export.spasm"
+expect_failure builtin_requires_export \
+	"$target" "$test_root/no_export.spasm" \
+	--out "$test_root/no_export.S"
+
+printf '%s\n' \
+	'export fn narrow(a: u32) -> u32 { return a; }' \
+	>"$test_root/narrow_export.spasm"
+expect_failure builtin_rejects_unstable_narrow_abi \
+	"$target" "$test_root/narrow_export.spasm" \
+	--out "$test_root/narrow_export.S"
+
+printf '%s\n' \
+	'export fn init_module(a: usize) -> usize { return a; }' \
+	>"$test_root/reserved_export.spasm"
+expect_failure builtin_rejects_reserved_symbol \
+	"$target" "$test_root/reserved_export.spasm" \
+	--out "$test_root/reserved_export.S"
+
+printf '%s\n' \
+	'module "module_export"' \
+	'license "GPL"' \
+	'export fn visible(a: usize) -> usize { return a; }' \
+	'on load { return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/module_export.spasm"
+expect_failure module_rejects_export_fn \
+	"$target" "$test_root/module_export.spasm" \
+	--out-dir "$test_root/module_export"
 
 expect_failure missing_source \
 	"$target" "$test_root/missing.spasm" --out-dir "$test_root/missing"
@@ -273,6 +329,28 @@ printf '%s\n' \
 expect_failure dynamic_index_must_be_usize \
 	"$target" "$test_root/wrong_index_type.spasm" \
 	--out-dir "$test_root/wrong_index_type"
+
+printf '%s\n' \
+	'module "unauthorized_extern"' \
+	'license "GPL"' \
+	'extern fn printk(valor: usize) -> usize' \
+	'on load { return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/unauthorized_extern.spasm"
+expect_failure unauthorized_kernel_extern_rejected \
+	"$target" "$test_root/unauthorized_extern.spasm" \
+	--out-dir "$test_root/unauthorized_extern"
+
+printf '%s\n' \
+	'module "wrong_gcd_signature"' \
+	'license "GPL"' \
+	'extern fn gcd(a: i64, b: i64) -> i64' \
+	'on load { return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/wrong_gcd_signature.spasm"
+expect_failure unauthorized_gcd_signature_rejected \
+	"$target" "$test_root/wrong_gcd_signature.spasm" \
+	--out-dir "$test_root/wrong_gcd_signature"
 
 echo "1..$((pass + fail))"
 echo "# pass=$pass fail=$fail"

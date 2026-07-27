@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// Nice Kernel replacement for Linux gcd().
+// The core has a stable internal name. Kbuild selects either the transparent
+// Linux entry point or the dual C/SpASM comparison adapter.
+
+export fn nice_gcd_spasm(a: usize, b: usize) -> usize {
+	var resto: usize = 0;
+	while (b != 0) {
+		resto = a % b;
+		a = b;
+		b = resto;
+	}
+	return a;
+}

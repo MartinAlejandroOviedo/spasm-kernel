@@ -69,3 +69,7 @@ y árbol del kernel usados para producir el objeto y el módulo `.ko`.
 Este contrato permanece estable cuando el parser y el análisis semántico pasen
 al frontend compartido de SpASM. Un target desconocido o no registrado produce
 un error explícito; nunca se utiliza el generador C como fallback.
+
+El contrato de compatibilidad con Linux, ABI y objetos builtin se amplía en
+`spasm-linux-abi-v2.md`. V1 continúa describiendo la entrada histórica para
+módulos; V2 es la norma aplicable a nuevas migraciones.

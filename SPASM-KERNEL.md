@@ -41,6 +41,9 @@ Comandos:
 - `module`: compila el primer módulo nativo `.spasm` a `.ko` mediante Kbuild.
 - `initramfs`: construye el initramfs configurable.
 - `test`: arranca el kernel con el initramfs en QEMU.
+- `abi-test`: valida el contrato Linux–SpASM ABI v2 con ELF y objtool.
+- `kbuild-test`: valida la integración incremental `.spasm -> .o`.
+- `dual-test`: valida los objetos y símbolos del modo comparativo C/SpASM.
 - `spasm-info`: muestra la interfaz del compilador propio.
 
 Verificación reproducible del primer hito Ring 0:
@@ -206,10 +209,110 @@ u8 i8 u16 i16 u32 i32 u64 i64 usize isize bool
 Las firmas, cantidad de argumentos, compatibilidad exacta de tipos y constantes
 fuera de rango se rechazan durante la compilación. Los argumentos siguen la ABI
 System V x86_64 en registros y el resultado se devuelve en `rax`. En esta fase
-las funciones son puras, contienen exactamente un `return`, no llaman la API
-Linux y realizan la aritmética en registros de 64 bits; el truncado y la
-comprobación de overflow para tipos menores quedan para la siguiente revisión
-del sistema de tipos.
+las funciones admiten variables locales, asignaciones, `if/else`, `while` y
+retorno expresivo. Las llamadas a símbolos Linux requieren una declaración
+`extern fn` cuya firma figure en una lista explícita; actualmente sólo se
+autoriza `gcd(usize, usize) -> usize`. La aritmética usa registros de 64 bits;
+el truncado y la comprobación de overflow para tipos menores quedan para la
+siguiente revisión del sistema de tipos.
+
+La primera equivalencia con código existente de Linux está documentada en
+`docs/nice-kernel/migrations/gcd-v1.md`.
+
+## Funciones builtin reemplazables
+
+Una función SpASM exporta un núcleo con ABI Linux. Para reutilizar exactamente
+el mismo núcleo en los modos directo y dual, `gcd` usa un nombre interno
+estable:
+
+```text
+export fn nice_gcd_spasm(a: usize, b: usize) -> usize {
+	...
+}
+```
+
+En modo builtin el target genera un objeto sin `init_module` ni `.modinfo`, usa
+la sección estándar `.text` y emite `ENDBR` para IBT. Una entrada mínima
+preserva el símbolo público `gcd` en el modo directo; el comparador lo preserva
+en modo dual. La selección reversible se controla con un `choice` de Kconfig:
+
+```text
+CONFIG_NICE_KERNEL_GCD_C=y       # implementación Linux original
+CONFIG_NICE_KERNEL_SPASM_GCD=y   # implementación SpASM
+CONFIG_NICE_KERNEL_GCD_DUAL=y    # ejecuta C y SpASM, retorna SpASM
+```
+
+Los tres modos preservan un único `GLOBAL FUNC` público llamado `gcd`. El modo
+dual contabiliza llamadas y divergencias y diagnostica resultados distintos
+con límite de tasa. Su contrato está en
+`docs/nice-kernel/spasm-migration-dual-v1.md`.
+
+Kbuild invoca al compilador propio mediante `SPASMC`; por ejemplo:
+
+```sh
+make O=/ruta/build ARCH=x86_64 \
+	SPASMC=/home/martin/Documentos/SpASM/tools/spasmc.py
+```
+
+La equivalencia y una medición de host reproducible se ejecutan con:
+
+```sh
+tools/testing/selftests/nice-kernel/run_gcd_equivalence
+```
+
+Desde la Fase 3, cualquier objeto simple listado por Kbuild puede proceder de
+un archivo del mismo nombre con extensión `.spasm`. Por ejemplo,
+`obj-y += gcd_spasm.o` descubre `gcd_spasm.spasm`, ejecuta `spasmc`, conserva
+`gcd_spasm.spasm.S` para auditoría y ensambla el objeto con las mismas opciones,
+`objtool` y metadatos de un `.S` del kernel. No hace falta una regla particular
+en el Makefile del subsistema.
+
+La integración incremental, reproducibilidad y propiedades ELF se verifican
+con:
+
+```sh
+tools/testing/selftests/nice-kernel/run_kbuild_spasm
+```
+
+El contrato completo de esta integración está en
+`docs/nice-kernel/spasm-kbuild-v1.md`.
+
+El build host necesita normalmente `bc`. Para entornos mínimos, Nice Kernel
+incluye un reemplazo limitado exclusivamente a `kernel/time/timeconst.bc` en
+`tools/nice-kernel/host-tools`; no pretende ser una implementación general de
+`bc`.
+
+## Contrato Linux–SpASM ABI v2
+
+La Fase 2 se especifica en:
+
+```text
+docs/nice-kernel/spasm-linux-abi-v2.md
+```
+
+El contrato formaliza registros de argumentos y retorno, preservación de
+registros, alineación de pila, visibilidad de símbolos, secciones ELF, IBT,
+rethunk, objtool, ORC y relocaciones autorizadas. Su verificación ejecutable es:
+
+```sh
+KERNEL_BUILD=/home/martin/Disco3/kernelLinux/build-nice-spasm-gcd \
+	tools/spasm-kernel/project abi-test
+```
+
+Estado de la Fase 2:
+
+- 30/30 pruebas semánticas del backend;
+- 3/3 grupos de conformidad ABI/ELF;
+- `gcd` es `GLOBAL FUNC` en `.text`;
+- funciones auxiliares SpASM son `LOCAL`;
+- `.text` está alineada a 16 bytes y la pila no es ejecutable;
+- objtool acepta stack validation, ORC, rethunk y SLS sin advertencias;
+- `vmlinux` conserva `gcd`, `__ksymtab_gcd` y `__kstrtab_gcd`;
+- los kernels C y SpASM construyen completos.
+
+Los atributos sensibles `noinstr`, `noreturn`, `naked`, `init`, `exit`,
+`__percpu`, `__user` y `__iomem` no se simulan: quedan explícitamente fuera de
+V2 hasta contar con análisis semántico específico.
 
 ## Punteros tipados
 

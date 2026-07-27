@@ -431,6 +431,20 @@ endif
 $(obj)/%.o: $(obj)/%.S FORCE
 	$(call if_changed_rule,as_o_S)
 
+# SpASM is a first-class Kbuild source. The generated assembly is retained so
+# diagnostics and binary audits can be traced back to the compiler output.
+spasm-tool-deps := \
+	$(wildcard $(SPASMC)) \
+	$(wildcard $(SPASM_TARGET_PATH)/spasm-kmod-native.py) \
+	$(SPASM_TARGET_PATH)/spasm-target-$(SPASM_TARGET)
+
+$(obj)/%.o: $(src)/%.spasm $(spasm-tool-deps) FORCE
+	$(call if_changed_rule,spasm_o)
+
+spasm-objs := $(foreach o,$(real-obj-y) $(real-obj-m) $(lib-y), \
+	$(if $(wildcard $(patsubst $(obj)/%.o,$(src)/%.spasm,$(o))),$(o)))
+targets += $(patsubst %.o,%.spasm.S,$(spasm-objs))
+
 targets += $(filter-out $(subdir-builtin), $(real-obj-y))
 targets += $(filter-out $(subdir-modorder), $(real-obj-m))
 targets += $(lib-y) $(always-y)
