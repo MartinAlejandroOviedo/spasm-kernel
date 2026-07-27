@@ -50,7 +50,7 @@ lib-$(CONFIG_MIN_HEAP) += min_heap.o
 lib-y	+= kobject.o klist.o
 obj-y	+= lockref.o
 
-obj-y += bcd.o sort.o parser.o debug_locks.o random32.o \
+obj-y += sort.o parser.o debug_locks.o random32.o \
 	 bust_spinlocks.o kasprintf.o bitmap.o scatterlist.o \
 	 list_sort.o uuid.o iov_iter.o clz_ctz.o \
 	 bsearch.o find_bit.o llist.o lwq.o memweight.o kfifo.o \
@@ -59,6 +59,12 @@ obj-y += bcd.o sort.o parser.o debug_locks.o random32.o \
 	 generic-radix-tree.o bitmap-str.o
 obj-y += string_helpers.o
 obj-y += hexdump.o
+
+obj-$(CONFIG_NICE_KERNEL_BCD_C) += bcd.o
+obj-$(CONFIG_NICE_KERNEL_BCD_SPASM) += bcd.o bcd2bin_spasm.o bcd2bin_spasm_entry.o bcd2bin_export.o
+obj-$(CONFIG_NICE_KERNEL_BCD_DUAL) += bcd.o bcd2bin_spasm.o bcd2bin_dual.o
+
+obj-$(CONFIG_NICE_KERNEL_HEX_TO_BIN_SPASM) += hex_to_bin_spasm.o hex_to_bin_spasm_entry.o hex_to_bin_export.o
 obj-$(CONFIG_TEST_HEXDUMP) += test_hexdump.o
 obj-y += kstrtox.o
 obj-$(CONFIG_FIND_BIT_BENCHMARK) += find_bit_benchmark.o

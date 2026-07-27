@@ -58,6 +58,7 @@ INTEGER_TYPES = {
     "bool": (0, 1),
 }
 ARG_REGISTERS = ("rdi", "rsi", "rdx", "rcx", "r8", "r9")
+ARG_REGISTERS_32 = ("edi", "esi", "edx", "ecx", "r8d", "r9d")
 EXPR_RE = re.compile(
     r"^\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*)"
     r"(?:\s*([+\-*/%])\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*))?\s*$"
@@ -1482,9 +1483,30 @@ def emit_function(
             if remaining >= 1:
                 lines.append(f"\tmovb $0, {pos}(%rbp)")
         else:
-            lines.append(f"\tmovq $0, {slot_offset}(%rbp)")
-    for (param_name, _param_type), register in zip(params, ARG_REGISTERS):
-        lines.append(f"\tmovq %{register}, {slots[param_name]}(%rbp)")
+            width = type_size_and_align(slot_type)[0]
+            if width >= 8:
+                lines.append(f"\tmovq $0, {slot_offset}(%rbp)")
+            elif width >= 4:
+                lines.append(f"\tmovl $0, {slot_offset}(%rbp)")
+            elif width >= 2:
+                lines.append(f"\tmovw $0, {slot_offset}(%rbp)")
+            else:
+                lines.append(f"\tmovb $0, {slot_offset}(%rbp)")
+    for (param_name, param_type), register, reg32 in zip(params, ARG_REGISTERS, ARG_REGISTERS_32):
+        width = type_size_and_align(param_type)[0]
+        if width >= 8 or is_pointer_type(param_type) or is_struct_type(param_type):
+            lines.append(f"\tmovq %{register}, {slots[param_name]}(%rbp)")
+        else:
+            if param_type.startswith("i"):
+                lines.append(f"\tmovslq %{reg32}, %rax")
+            else:
+                lines.append(f"\tmovl %{reg32}, %eax")
+            if width >= 4:
+                lines.append(f"\tmovl %eax, {slots[param_name]}(%rbp)")
+            elif width >= 2:
+                lines.append(f"\tmovw %ax, {slots[param_name]}(%rbp)")
+            else:
+                lines.append(f"\tmovb %al, {slots[param_name]}(%rbp)")
 
     active = []
     message_index = [0]
@@ -1576,7 +1598,15 @@ def emit_function(
                     memory_error_label,
                     value_type,
                 )
-                lines.append(f"\tmovq %rax, {slots[variable_name]}(%rbp)")
+                width = type_size_and_align(value_type)[0]
+                if width >= 8:
+                    lines.append(f"\tmovq %rax, {slots[variable_name]}(%rbp)")
+                elif width >= 4:
+                    lines.append(f"\tmovl %eax, {slots[variable_name]}(%rbp)")
+                elif width >= 2:
+                    lines.append(f"\tmovw %ax, {slots[variable_name]}(%rbp)")
+                else:
+                    lines.append(f"\tmovb %al, {slots[variable_name]}(%rbp)")
         elif statement_kind == "store_field":
             base_name, _field_names, field_offset, field_type, expression = statement[1:]
             emit_expression(

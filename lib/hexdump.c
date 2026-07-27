@@ -43,14 +43,20 @@ EXPORT_SYMBOL(hex_asc_upper);
  *	uppercase and lowercase letters, so we use (ch & 0xdf), which converts
  *	lowercase to uppercase
  */
+#ifdef CONFIG_NICE_KERNEL_HEX_TO_BIN_SPASM
+int __weak hex_to_bin(unsigned char ch)
+#else
 int hex_to_bin(unsigned char ch)
+#endif
 {
 	unsigned char cu = ch & 0xdf;
 	return -1 +
 		((ch - '0' +  1) & (unsigned)((ch - '9' - 1) & ('0' - 1 - ch)) >> 8) +
 		((cu - 'A' + 11) & (unsigned)((cu - 'F' - 1) & ('A' - 1 - cu)) >> 8);
 }
+#ifndef CONFIG_NICE_KERNEL_HEX_TO_BIN_SPASM
 EXPORT_SYMBOL(hex_to_bin);
+#endif
 
 /**
  * hex2bin - convert an ascii hexadecimal string to its binary representation

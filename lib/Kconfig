@@ -8,6 +8,41 @@ config BINARY_PRINTF
 
 menu "Library routines"
 
+choice
+	prompt "Nice Kernel _bcd2bin implementation"
+	default NICE_KERNEL_BCD_C
+	depends on X86_64
+
+config NICE_KERNEL_BCD_C
+	bool "Original Linux C implementation"
+
+config NICE_KERNEL_BCD_SPASM
+	bool "SpASM implementation"
+
+config NICE_KERNEL_BCD_DUAL
+	bool "Dual C/SpASM comparison"
+
+endchoice
+
+choice
+	prompt "Nice Kernel hex_to_bin implementation"
+	default NICE_KERNEL_HEX_TO_BIN_C
+	depends on X86_64
+
+config NICE_KERNEL_HEX_TO_BIN_C
+	bool "Original Linux C implementation"
+
+config NICE_KERNEL_HEX_TO_BIN_SPASM
+	bool "SpASM implementation"
+	help
+	  Use SpASM implementation of hex_to_bin(). The C version
+	  in hexdump.c is compiled as __weak and overridden at link time.
+
+config NICE_KERNEL_HEX_TO_BIN_DUAL
+	bool "Dual C/SpASM comparison"
+
+endchoice
+
 config RAID6_PQ
 	tristate
 
