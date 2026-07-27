@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// Nice Kernel replacement for Linux _bcd2bin().
+
+export fn nice_bcd2bin_spasm(val: i32) -> i32 {
+	var lo: i32 = val % 16;
+	var hi: i32 = val / 16;
+	var result: i32 = hi * 10;
+	result = lo + result;
+	return result;
+}
