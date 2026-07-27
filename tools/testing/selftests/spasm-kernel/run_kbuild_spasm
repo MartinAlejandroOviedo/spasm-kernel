@@ -22,8 +22,8 @@ die()
 
 [ -f "$kernel_build/.config" ] || die "falta $kernel_build/.config"
 [ -f "$spasmc" ] || die "no existe el compilador: $spasmc"
-grep -q '^CONFIG_NICE_KERNEL_GCD_SPASM=y$' "$kernel_build/.config" ||
-	die "CONFIG_NICE_KERNEL_GCD_SPASM no esta habilitado"
+grep -q '^CONFIG_SPASM_KERNEL_GCD_SPASM=y$' "$kernel_build/.config" ||
+	die "CONFIG_SPASM_KERNEL_GCD_SPASM no esta habilitado"
 
 build_object()
 {
