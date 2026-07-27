@@ -192,8 +192,8 @@ def main():
 
     try:
         config = (build / ".config").read_text(encoding="utf-8")
-        require("CONFIG_NICE_KERNEL_SPASM_GCD=y" in config,
-                "el build no selecciona CONFIG_NICE_KERNEL_SPASM_GCD=y")
+        require("CONFIG_NICE_KERNEL_GCD_SPASM=y" in config,
+                "el build no selecciona CONFIG_NICE_KERNEL_GCD_SPASM=y")
         check_builtin(build)
         print("ok - builtin ELF y ABI")
         check_vmlinux(build)
