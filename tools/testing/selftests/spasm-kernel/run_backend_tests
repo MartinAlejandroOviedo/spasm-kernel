@@ -1,0 +1,357 @@
+#!/bin/bash
+set -euo pipefail
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
+target="$kernel_src/tools/spasm-kernel/spasm-target-spasm-kernel-x86_64"
+sample="$kernel_src/samples/spasm/hello_kmod.spasm"
+test_root=$(mktemp -d)
+trap 'rm -rf -- "$test_root"' EXIT
+
+pass=0
+fail=0
+
+expect_success()
+{
+	local name=$1
+	shift
+	if "$@" >"$test_root/$name.out" 2>"$test_root/$name.err"; then
+		echo "ok - $name"
+		pass=$((pass + 1))
+	else
+		echo "not ok - $name"
+		fail=$((fail + 1))
+	fi
+}
+
+expect_failure()
+{
+	local name=$1
+	shift
+	if "$@" >"$test_root/$name.out" 2>"$test_root/$name.err"; then
+		echo "not ok - $name"
+		fail=$((fail + 1))
+	else
+		echo "ok - $name"
+		pass=$((pass + 1))
+	fi
+}
+
+expect_success valid_module \
+	"$target" "$sample" --out-dir "$test_root/valid"
+test -s "$test_root/valid/spasm_hello_native.S"
+test -s "$test_root/valid/Makefile"
+if grep -q '^spasm_fn_spasm_gcd:' \
+	"$test_root/valid/spasm_hello_native.S" &&
+	grep -q 'call gcd' "$test_root/valid/spasm_hello_native.S" &&
+	grep -q 'idivq' "$test_root/valid/spasm_hello_native.S"; then
+	echo "ok - full_function_and_linux_gcd_equivalence_emitted"
+	pass=$((pass + 1))
+else
+	echo "not ok - full_function_and_linux_gcd_equivalence_emitted"
+	fail=$((fail + 1))
+fi
+if find "$test_root/valid" -type f -name '*.c' | grep -q .; then
+	echo "not ok - native_output_contains_no_c"
+	fail=$((fail + 1))
+else
+	echo "ok - native_output_contains_no_c"
+	pass=$((pass + 1))
+fi
+
+expect_success builtin_export \
+	"$target" "$kernel_src/lib/math/gcd_spasm.spasm" \
+	--out "$test_root/gcd_spasm.S"
+if grep -q '^spasm_gcd:' "$test_root/gcd_spasm.S" &&
+	grep -q '^[[:space:]]*divq %rcx' "$test_root/gcd_spasm.S" &&
+	! grep -q 'spasm_fn_spasm_gcd\\|init_module\\|\\.modinfo' \
+		"$test_root/gcd_spasm.S"; then
+	echo "ok - builtin_preserves_selected_symbol"
+	pass=$((pass + 1))
+else
+	echo "not ok - builtin_preserves_selected_symbol"
+	fail=$((fail + 1))
+fi
+
+printf '%s\n' \
+	'fn internal_only(a: usize) -> usize { return a; }' \
+	>"$test_root/no_export.spasm"
+expect_failure builtin_requires_export \
+	"$target" "$test_root/no_export.spasm" \
+	--out "$test_root/no_export.S"
+
+printf '%s\n' \
+	'export fn narrow(a: u32) -> u32 { return a; }' \
+	>"$test_root/narrow_export.spasm"
+expect_failure builtin_rejects_unstable_narrow_abi \
+	"$target" "$test_root/narrow_export.spasm" \
+	--out "$test_root/narrow_export.S"
+
+printf '%s\n' \
+	'export fn init_module(a: usize) -> usize { return a; }' \
+	>"$test_root/reserved_export.spasm"
+expect_failure builtin_rejects_reserved_symbol \
+	"$target" "$test_root/reserved_export.spasm" \
+	--out "$test_root/reserved_export.S"
+
+printf '%s\n' \
+	'module "module_export"' \
+	'license "GPL"' \
+	'export fn visible(a: usize) -> usize { return a; }' \
+	'on load { return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/module_export.spasm"
+expect_failure module_rejects_export_fn \
+	"$target" "$test_root/module_export.spasm" \
+	--out-dir "$test_root/module_export"
+
+expect_failure missing_source \
+	"$target" "$test_root/missing.spasm" --out-dir "$test_root/missing"
+expect_failure invalid_extension \
+	"$target" "$sample.txt" --out-dir "$test_root/extension"
+
+printf 'module "broken"\\nlicense "GPL"\\non load {\\n  desconocido\\n}\\n' \
+	>"$test_root/invalid.spasm"
+expect_failure invalid_statement \
+	"$target" "$test_root/invalid.spasm" --out-dir "$test_root/invalid"
+
+printf '%s\n' \
+	'module "range"' \
+	'license "GPL"' \
+	'on load { var valor: u8 = 256; return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/range.spasm"
+expect_failure integer_out_of_range \
+	"$target" "$test_root/range.spasm" --out-dir "$test_root/range"
+
+printf '%s\n' \
+	'module "unknown_type"' \
+	'license "GPL"' \
+	'on load { var valor: word = 1; return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/unknown_type.spasm"
+expect_failure unknown_integer_type \
+	"$target" "$test_root/unknown_type.spasm" \
+	--out-dir "$test_root/unknown_type"
+
+printf '%s\n' \
+	'module "wrong_args"' \
+	'license "GPL"' \
+	'fn sumar(a: i64, b: i64) -> i64 { return a + b; }' \
+	'on load { var valor: i64 = sumar(1); return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/wrong_args.spasm"
+expect_failure wrong_argument_count \
+	"$target" "$test_root/wrong_args.spasm" \
+	--out-dir "$test_root/wrong_args"
+
+printf '%s\n' \
+	'module "wrong_type"' \
+	'license "GPL"' \
+	'fn identidad(a: u16) -> u16 { return a; }' \
+	'on load {' \
+	'  var pequeno: u8 = 1;' \
+	'  var valor: u16 = identidad(pequeno);' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/wrong_type.spasm"
+expect_failure incompatible_argument_type \
+	"$target" "$test_root/wrong_type.spasm" \
+	--out-dir "$test_root/wrong_type"
+
+printf '%s\n' \
+	'module "nullable"' \
+	'license "GPL"' \
+	'on load { var opcional: ptr<u8>? = 0; return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/nullable.spasm"
+expect_success nullable_pointer_accepts_null \
+	"$target" "$test_root/nullable.spasm" \
+	--out-dir "$test_root/nullable"
+
+printf '%s\n' \
+	'module "nonnull"' \
+	'license "GPL"' \
+	'on load { var obligatorio: ptr<u8> = 0; return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/nonnull.spasm"
+expect_failure nonnullable_pointer_rejects_null \
+	"$target" "$test_root/nonnull.spasm" \
+	--out-dir "$test_root/nonnull"
+
+printf '%s\n' \
+	'module "pointer_math"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  var desplazado: ptr<u8> = buffer + 1;' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/pointer_math.spasm"
+expect_failure pointer_arithmetic_rejected \
+	"$target" "$test_root/pointer_math.spasm" \
+	--out-dir "$test_root/pointer_math"
+
+printf '%s\n' \
+	'module "pointer_order"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  var alias: ptr<u8> = buffer;' \
+	'  if (alias < buffer) { alias = buffer; }' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/pointer_order.spasm"
+expect_failure pointer_order_rejected \
+	"$target" "$test_root/pointer_order.spasm" \
+	--out-dir "$test_root/pointer_order"
+
+printf '%s\n' \
+	'module "owner_assign"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  buffer = buffer;' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/owner_assign.spasm"
+expect_failure owning_resource_reassignment_rejected \
+	"$target" "$test_root/owner_assign.spasm" \
+	--out-dir "$test_root/owner_assign"
+
+printf '%s\n' \
+	'module "memory_bounds"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  guardar<u32>(buffer, 8, 1);' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/memory_bounds.spasm"
+expect_failure memory_out_of_bounds_rejected \
+	"$target" "$test_root/memory_bounds.spasm" \
+	--out-dir "$test_root/memory_bounds"
+
+printf '%s\n' \
+	'module "memory_alignment"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  guardar<u32>(buffer, 2, 1);' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/memory_alignment.spasm"
+expect_failure unaligned_memory_access_rejected \
+	"$target" "$test_root/memory_alignment.spasm" \
+	--out-dir "$test_root/memory_alignment"
+
+printf '%s\n' \
+	'module "memory_lifetime"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  liberar buffer' \
+	'  var valor: u8 = cargar<u8>(buffer, 0);' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/memory_lifetime.spasm"
+expect_failure access_after_free_rejected \
+	"$target" "$test_root/memory_lifetime.spasm" \
+	--out-dir "$test_root/memory_lifetime"
+
+printf '%s\n' \
+	'module "memory_value_type"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(8) else return -ENOMEM' \
+	'  var valor: u16 = 1;' \
+	'  guardar<u32>(buffer, 0, valor);' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/memory_value_type.spasm"
+expect_failure stored_value_type_mismatch_rejected \
+	"$target" "$test_root/memory_value_type.spasm" \
+	--out-dir "$test_root/memory_value_type"
+
+printf '%s\n' \
+	'module "dynamic_index"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(16) else return -ENOMEM' \
+	'  var indice: usize = 4;' \
+	'  guardar<u32>(buffer, indice, 42);' \
+	'  var valor: u32 = cargar<u32>(buffer, indice);' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/dynamic_index.spasm"
+expect_success dynamic_usize_index \
+	"$target" "$test_root/dynamic_index.spasm" \
+	--out-dir "$test_root/dynamic_index"
+dynamic_asm="$test_root/dynamic_index/dynamic_index_native.S"
+if grep -q 'ja .Linit_memory_range_error' "$dynamic_asm" &&
+	grep -q 'jnz .Linit_memory_range_error' "$dynamic_asm" &&
+	grep -q 'movl \$-34, %eax' "$dynamic_asm"; then
+	echo "ok - dynamic_index_emits_range_alignment_cleanup"
+	pass=$((pass + 1))
+else
+	echo "not ok - dynamic_index_emits_range_alignment_cleanup"
+	fail=$((fail + 1))
+fi
+
+printf '%s\n' \
+	'module "wrong_index_type"' \
+	'license "GPL"' \
+	'on load {' \
+	'  recurso buffer = kalloc<u8>(16) else return -ENOMEM' \
+	'  var indice: i64 = 4;' \
+	'  guardar<u32>(buffer, indice, 42);' \
+	'  liberar buffer' \
+	'  return 0' \
+	'}' \
+	'on unload { return 0 }' \
+	>"$test_root/wrong_index_type.spasm"
+expect_failure dynamic_index_must_be_usize \
+	"$target" "$test_root/wrong_index_type.spasm" \
+	--out-dir "$test_root/wrong_index_type"
+
+printf '%s\n' \
+	'module "unauthorized_extern"' \
+	'license "GPL"' \
+	'extern fn printk(valor: usize) -> usize' \
+	'on load { return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/unauthorized_extern.spasm"
+expect_failure unauthorized_kernel_extern_rejected \
+	"$target" "$test_root/unauthorized_extern.spasm" \
+	--out-dir "$test_root/unauthorized_extern"
+
+printf '%s\n' \
+	'module "wrong_gcd_signature"' \
+	'license "GPL"' \
+	'extern fn gcd(a: i64, b: i64) -> i64' \
+	'on load { return 0 }' \
+	'on unload { return 0 }' \
+	>"$test_root/wrong_gcd_signature.spasm"
+expect_failure unauthorized_gcd_signature_rejected \
+	"$target" "$test_root/wrong_gcd_signature.spasm" \
+	--out-dir "$test_root/wrong_gcd_signature"
+
+echo "1..$((pass + fail))"
+echo "# pass=$pass fail=$fail"
+test "$fail" -eq 0

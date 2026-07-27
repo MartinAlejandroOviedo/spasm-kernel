@@ -1,0 +1,143 @@
+#!/bin/busybox sh
+
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+
+mode=shell
+message="SpASM_Kernel_Machine_and_User_Care"
+hostname=spasm-kernel
+delay=0
+debug=0
+
+mount_fs()
+{
+	/bin/busybox mkdir -p /proc /sys /dev /run /tmp
+	/bin/busybox mount -t proc proc /proc
+	/bin/busybox mount -t sysfs sysfs /sys
+	/bin/busybox mount -t devtmpfs devtmpfs /dev 2>/dev/null ||
+		/bin/busybox mount -t tmpfs tmpfs /dev
+}
+
+read_cmdline()
+{
+	local option value
+
+	for option in $(/bin/busybox cat /proc/cmdline); do
+		value=${option#*=}
+		case "$option" in
+		spasm.mode=*) mode=$value ;;
+		spasm.message=*) message=$value ;;
+		spasm.hostname=*) hostname=$value ;;
+		spasm.delay=*) delay=$value ;;
+		spasm.debug=*) debug=$value ;;
+		esac
+	done
+
+	case "$delay" in
+	''|*[!0-9]*) delay=0 ;;
+	esac
+}
+
+shutdown_system()
+{
+	/bin/busybox sync
+	/bin/busybox umount /proc 2>/dev/null
+	/bin/busybox umount /sys 2>/dev/null
+
+	case "$1" in
+	reboot) /bin/busybox reboot -f ;;
+	*) /bin/busybox poweroff -f ;;
+	esac
+}
+
+run_test()
+{
+	local failed=0
+	local module=/lib/modules/spasm_hello.ko
+
+	echo "[spasm-init] Ejecutando prueba base"
+	test -r /proc/cpuinfo || failed=1
+	test -d /sys/kernel || failed=1
+	test -c /dev/console || failed=1
+	echo "[spasm-init] Kernel: $(/bin/busybox uname -r)"
+	echo "[spasm-init] CPU: $(/bin/busybox uname -m)"
+
+	if [ -f "$module" ]; then
+		echo "[spasm-init] Cargando modulo SpASM nativo"
+		if /bin/busybox insmod "$module"; then
+			if /bin/busybox grep -q '^spasm_hello ' /proc/modules; then
+				echo "[spasm-init] Modulo SpASM: CARGADO"
+			else
+				echo "[spasm-init] Modulo SpASM: NO VISIBLE"
+				failed=1
+			fi
+			if /bin/busybox rmmod spasm_hello; then
+				echo "[spasm-init] Modulo SpASM: DESCARGADO"
+			else
+				echo "[spasm-init] Modulo SpASM: ERROR AL DESCARGAR"
+				failed=1
+			fi
+		else
+			echo "[spasm-init] Modulo SpASM: ERROR AL CARGAR"
+			failed=1
+		fi
+	else
+		echo "[spasm-init] Modulo SpASM: no incluido"
+	fi
+
+	if [ "$failed" -ne 0 ]; then
+		echo "[spasm-init] RESULTADO: ERROR"
+		return 1
+	fi
+
+	echo "[spasm-init] RESULTADO: OK"
+	return 0
+}
+
+mount_fs
+read_cmdline
+/bin/busybox hostname "$hostname"
+
+echo
+echo "[spasm-init] $message"
+echo "[spasm-init] mode=$mode hostname=$hostname delay=$delay debug=$debug"
+
+if [ "$debug" = "1" ]; then
+	echo "[spasm-init] cmdline: $(/bin/busybox cat /proc/cmdline)"
+	/bin/busybox mount
+fi
+
+if [ "$delay" -gt 0 ]; then
+	/bin/busybox sleep "$delay"
+fi
+
+case "$mode" in
+shell)
+	echo "[spasm-init] Consola interactiva; use poweroff -f para salir"
+	/bin/busybox sh
+	shutdown_system poweroff
+	;;
+test)
+	if run_test; then
+		shutdown_system poweroff
+	fi
+	echo "[spasm-init] Prueba fallida; iniciando consola"
+	/bin/busybox sh
+	shutdown_system poweroff
+	;;
+poweroff)
+	shutdown_system poweroff
+	;;
+reboot)
+	shutdown_system reboot
+	;;
+*)
+	echo "[spasm-init] mode desconocido: $mode"
+	echo "[spasm-init] modos válidos: shell, test, poweroff, reboot"
+	/bin/busybox sh
+	shutdown_system poweroff
+	;;
+esac
+
+echo "[spasm-init] ERROR: no fue posible detener el sistema"
+exec /bin/busybox sh

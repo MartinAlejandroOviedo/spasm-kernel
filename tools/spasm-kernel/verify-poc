@@ -1,0 +1,49 @@
+#!/bin/bash
+set -euo pipefail
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+project_parent=$(CDPATH= cd -- "$kernel_src/.." && pwd)
+kernel_build=${KERNEL_BUILD:-"$project_parent/build-x86_64-baseline"}
+log_file=${SPASM_QEMU_LOG:-"$kernel_build/spasm-kernel-0.0.1-poc-qemu.log"}
+
+mkdir -p "$kernel_build"
+
+set +e
+timeout "${SPASM_QEMU_TIMEOUT:-45s}" \
+	"$kernel_src/tools/spasm-kernel/project" test 2>&1 |
+	tee "$log_file"
+test_status=${PIPESTATUS[0]}
+set -e
+
+if [ "$test_status" -ne 0 ]; then
+	echo "error: QEMU terminó con estado $test_status" >&2
+	exit "$test_status"
+fi
+
+required_signals=(
+	"[spasm-init] SpASM_Kernel_Machine_and_User_Care"
+	"spasm: SpASM Kernel: SpASM nativo activo en Ring 0"
+	"spasm: Puntero tipado SpASM correcto"
+	"spasm: Memoria tipada SpASM comprobada"
+	"spasm: Indice dinamico SpASM comprobado"
+	"spasm: Condicional SpASM nativo correcto"
+	"spasm: Bucle SpASM nativo correcto"
+	"spasm: Division y modulo SpASM correctos"
+	"spasm: Funciones y tipos SpASM correctos"
+	"spasm: Equivalencia Linux gcd y SpASM correcta"
+	"[spasm-init] Modulo SpASM: CARGADO"
+	"[spasm-init] Modulo SpASM: DESCARGADO"
+	"[spasm-init] RESULTADO: OK"
+)
+
+for signal in "${required_signals[@]}"; do
+	if ! grep -Fq "$signal" "$log_file"; then
+		echo "error: falta señal de validación: $signal" >&2
+		exit 1
+	fi
+done
+
+echo
+echo "SpASM Kernel 0.0.1 PoC: VERIFICADO"
+echo "Log: $log_file"

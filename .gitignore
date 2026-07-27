@@ -1,0 +1,13 @@
+*.o
+*.ko
+*.mod.c
+*.mod
+Module.symvers
+modules.order
+built-in.a
+*.spasm.S
+.*.cmd
+.*.d
+__pycache__/
+*.pyc
+*.egg-info/

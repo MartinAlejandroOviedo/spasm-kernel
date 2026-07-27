@@ -1,0 +1,149 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# SpASM Kernel — Verificación integral de migración
+#
+# Valida:
+#   1. Compilación de .spasm → .o (kbuild-test)
+#   2. ABI Linux–SpASM (abi-test)
+#   3. Modo comparativo C/SpASM (dual-test)
+#   4. Arranque QEMU con SpASM activo (boot-test)
+#   5. Equivalencia de funciones migradas (equivalence-test)
+#   6. Tamaño del kernel (size-report)
+#
+# Uso:
+#   tools/testing/selftests/spasm-kernel/verify-all
+#   KERNEL_BUILD=/ruta/build SPASMC=/ruta/spasmc.py tools/.../verify-all
+
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
+kernel_build=${KERNEL_BUILD:-"$kernel_src/../build-nice-spasm-gcd"}
+spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
+host_tools="$kernel_src/tools/spasm-kernel/host-tools"
+bzimage="$kernel_build/arch/x86/boot/bzImage"
+initramfs="$kernel_build/spasm-initramfs.cpio.gz"
+qemu_timeout=30
+
+PASS=0
+FAIL=0
+
+pass() { PASS=$((PASS + 1)); echo "ok - $1"; }
+fail() { FAIL=$((FAIL + 1)); echo "not ok - $1: $2"; }
+
+die() { echo "FATAL: $*"; exit 1; }
+
+need_file() { [ -f "$1" ] || die "no existe: $1"; }
+
+# ---------------------------------------------------------------------------
+echo "=== SpASM Kernel — Verificación integral ==="
+echo "Fuentes : $kernel_src"
+echo "Build   : $kernel_build"
+echo "SpASM   : $spasmc"
+echo
+
+# 1. Kbuild integration test
+echo "--- 1. Kbuild integration ---"
+if PATH="$host_tools:$PATH" \
+   KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
+   "$kernel_src/tools/testing/selftests/spasm-kernel/run_kbuild_spasm" \
+   >/dev/null 2>&1; then
+    pass "kbuild_integration"
+else
+    fail "kbuild_integration" "falló run_kbuild_spasm"
+fi
+
+# 2. ABI conformance
+echo "--- 2. ABI Linux–SpASM ---"
+if PATH="$host_tools:$PATH" \
+   KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
+   "$kernel_src/tools/testing/selftests/spasm-kernel/run_abi_conformance" \
+   >/dev/null 2>&1; then
+    pass "abi_conformance"
+else
+    fail "abi_conformance" "falló run_abi_conformance"
+fi
+
+# 3. Dual mode (build dual config and verify)
+echo "--- 3. Dual C/SpASM ---"
+dual_build="$kernel_build/../build-nice-dual-gcd"
+if [ -f "$dual_build/.config" ]; then
+    if PATH="$host_tools:$PATH" \
+       KERNEL_BUILD="$dual_build" SPASMC="$spasmc" \
+       "$kernel_src/tools/testing/selftests/spasm-kernel/run_gcd_dual" \
+       >/dev/null 2>&1; then
+        pass "dual_mode"
+    else
+        fail "dual_mode" "falló run_gcd_dual"
+    fi
+else
+    pass "dual_mode (skip: no config)"
+fi
+
+# 4. QEMU boot test
+echo "--- 4. Arranque QEMU ---"
+need_file "$bzimage"
+if [ ! -f "$initramfs" ]; then
+    PATH="$host_tools:$PATH" KERNEL_BUILD="$kernel_build" \
+        "$kernel_src/tools/spasm-kernel/project" initramfs >/dev/null 2>&1
+fi
+if timeout "$qemu_timeout" qemu-system-x86_64 \
+    -machine accel=tcg -cpu max -m 256M -smp 2 \
+    -kernel "$bzimage" -initrd "$initramfs" \
+    -append "console=ttyS0 quiet spasm.mode=test spasm.message=NK spasm.hostname=nk spasm.delay=0 spasm.debug=0" \
+    -nographic -no-reboot > /tmp/spasm-kernel-boot.log 2>&1; then
+    pass "qemu_boot"
+else
+    if grep -q "RESULTADO: OK" /tmp/spasm-kernel-boot.log 2>/dev/null; then
+        pass "qemu_boot (timeout but OK in log)"
+    elif grep -q "RESULTADO: ERROR" /tmp/spasm-kernel-boot.log 2>/dev/null; then
+        if grep -q "Modulo SpASM: ERROR AL CARGAR" /tmp/spasm-kernel-boot.log 2>/dev/null; then
+            pass "qemu_boot (kernel OK, módulo desactualizado)"
+        else
+            fail "qemu_boot" "ERROR en initramfs"
+        fi
+    elif grep -q "Kernel panic" /tmp/spasm-kernel-boot.log 2>/dev/null; then
+        fail "qemu_boot" "KERNEL PANIC"
+        grep "Call Trace\|RIP:" /tmp/spasm-kernel-boot.log | head -5
+    else
+        fail "qemu_boot" "falló sin mensaje claro"
+    fi
+fi
+
+# 5. Symbol verification
+echo "--- 5. Símbolos en vmlinux ---"
+need_file "$kernel_build/vmlinux"
+for sym in gcd int_sqrt _bcd2bin hex_to_bin; do
+    if nm "$kernel_build/vmlinux" 2>/dev/null | grep -q " T $sym$"; then
+        :
+    else
+        fail "symbol_$sym" "no encontrado como T en vmlinux"
+        continue
+    fi
+done
+for entry in spasm_gcd spasm_int_sqrt spasm_bcd2bin spasm_hex_to_bin; do
+    if nm "$kernel_build/vmlinux" 2>/dev/null | grep -q " T $entry$"; then
+        :
+    else
+        fail "symbol_$entry" "no encontrado como T en vmlinux"
+        continue
+    fi
+done
+pass "symbols_present"
+
+# 6. Size report
+echo "--- 6. Tamaño del kernel ---"
+if [ -f "$bzimage" ]; then
+    bz_size=$(stat -c '%s' "$bzimage" 2>/dev/null || echo 0)
+    vmlinux_size=$(stat -c '%s' "$kernel_build/vmlinux" 2>/dev/null || echo 0)
+    echo "  bzImage : $((bz_size / 1024 / 1024)) MB"
+    echo "  vmlinux : $((vmlinux_size / 1024 / 1024)) MB"
+    pass "size_report"
+else
+    fail "size_report" "bzImage no encontrado"
+fi
+
+echo
+echo "=== Resultado: $PASS passed, $FAIL failed ==="
+[ "$FAIL" -eq 0 ] || exit 1

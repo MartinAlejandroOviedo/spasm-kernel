@@ -1,0 +1,165 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+project_parent=$(CDPATH= cd -- "$kernel_src/.." && pwd)
+
+kernel_build=${KERNEL_BUILD:-"$project_parent/build-x86_64-baseline"}
+spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
+initramfs="$kernel_build/spasm-initramfs.cpio.gz"
+bzimage="$kernel_build/arch/x86/boot/bzImage"
+module_build="$kernel_build/spasm-modules/hello"
+spasm_module="$module_build/spasm_hello.ko"
+host_tools="$kernel_src/tools/spasm-kernel/host-tools"
+
+die()
+{
+	echo "error: $*" >&2
+	exit 1
+}
+
+need_file()
+{
+	[ -f "$1" ] || die "no existe: $1"
+}
+
+show_status()
+{
+	echo "Proyecto:  SpASM Kernel"
+	echo "Filosofia: Machine and User Care"
+	echo "Fuentes:   $kernel_src"
+	echo "Build:     $kernel_build"
+	echo "SpASM:     $spasmc"
+	echo "Kernel:    $(make -s -C "$kernel_src" kernelversion)"
+	git -C "$kernel_src" status --short --branch
+
+	if [ -f "$bzimage" ]; then
+		echo "bzImage:  $bzimage"
+	else
+		echo "bzImage:  pendiente"
+	fi
+
+	if [ -f "$initramfs" ]; then
+		echo "initramfs: $initramfs"
+	else
+		echo "initramfs: pendiente"
+	fi
+
+	if [ -f "$spasm_module" ]; then
+		echo "modulo:    $spasm_module"
+	else
+		echo "modulo:    pendiente"
+	fi
+}
+
+configure_kernel()
+{
+	mkdir -p "$kernel_build"
+	make -C "$kernel_src" O="$kernel_build" ARCH=x86_64 x86_64_defconfig
+}
+
+build_kernel()
+{
+	[ -f "$kernel_build/.config" ] || configure_kernel
+	PATH="$host_tools:$PATH" \
+		make -C "$kernel_src" O="$kernel_build" ARCH=x86_64 \
+		SPASMC="$spasmc" -j"${JOBS:-8}"
+}
+
+build_initramfs()
+{
+	base_initramfs="$project_parent/build-x86_64-baseline/spasm-initramfs.cpio.gz"
+	if [ -f "$spasm_module" ]; then
+		SPASM_MODULE="$spasm_module" \
+			BASE_INITRAMFS="$base_initramfs" \
+			"$kernel_src/tools/spasm-initramfs/build.sh" "$initramfs"
+	else
+		BASE_INITRAMFS="$base_initramfs" \
+			"$kernel_src/tools/spasm-initramfs/build.sh" "$initramfs"
+	fi
+}
+
+build_module()
+{
+	[ -f "$kernel_build/.config" ] || configure_kernel
+	need_file "$spasmc"
+	mkdir -p "$module_build"
+	SPASMC_TARGET_PATH="$kernel_src/tools/spasm-kernel" \
+		python3 "$spasmc" \
+		"$kernel_src/samples/spasm/hello_kmod.spasm" \
+		--target spasm-kernel-x86_64 \
+		--out-dir "$module_build"
+	make -C "$kernel_src" O="$kernel_build" ARCH=x86_64 \
+		M="$module_build" modules
+}
+
+test_kernel()
+{
+	need_file "$bzimage"
+	if [ ! -f "$spasm_module" ]; then
+		build_module
+	fi
+	build_initramfs
+
+	mode=${SPASM_MODE:-test}
+	message=${SPASM_MESSAGE:-SpASM_Kernel_Machine_and_User_Care}
+	hostname=${SPASM_HOSTNAME:-spasm-kernel}
+	delay=${SPASM_DELAY:-0}
+	debug=${SPASM_DEBUG:-0}
+
+	exec qemu-system-x86_64 \
+		-machine accel=tcg \
+		-cpu max \
+		-m "${QEMU_MEMORY:-512M}" \
+		-smp "${QEMU_CPUS:-2}" \
+		-kernel "$bzimage" \
+		-initrd "$initramfs" \
+		-append "console=ttyS0 spasm.mode=$mode spasm.message=$message spasm.hostname=$hostname spasm.delay=$delay spasm.debug=$debug" \
+		-nographic \
+		-no-reboot
+}
+
+show_spasm_info()
+{
+	need_file "$spasmc"
+	echo "Compilador propio: $spasmc"
+	python3 "$spasmc" --help
+}
+
+verify_abi()
+{
+	KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
+		"$kernel_src/tools/testing/selftests/spasm-kernel/run_abi_conformance"
+}
+
+verify_kbuild()
+{
+	KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
+		"$kernel_src/tools/testing/selftests/spasm-kernel/run_kbuild_spasm"
+}
+
+verify_dual()
+{
+	KERNEL_BUILD="$kernel_build" SPASMC="$spasmc" \
+		"$kernel_src/tools/testing/selftests/spasm-kernel/run_gcd_dual"
+}
+
+usage()
+{
+	echo "Uso: tools/spasm-kernel/project {status|config|build|module|initramfs|test|abi-test|kbuild-test|dual-test|spasm-info}"
+}
+
+case "${1:-}" in
+status) show_status ;;
+config) configure_kernel ;;
+build) build_kernel ;;
+module) build_module ;;
+initramfs) build_initramfs ;;
+test) test_kernel ;;
+abi-test) verify_abi ;;
+kbuild-test) verify_kbuild ;;
+dual-test) verify_dual ;;
+spasm-info) show_spasm_info ;;
+*) usage; exit 2 ;;
+esac

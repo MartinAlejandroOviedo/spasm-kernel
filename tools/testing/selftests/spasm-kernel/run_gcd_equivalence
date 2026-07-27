@@ -1,0 +1,25 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-only
+set -euo pipefail
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
+spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
+test_root=$(mktemp -d)
+trap 'rm -rf -- "$test_root"' EXIT
+
+SPASMC_TARGET_PATH="$kernel_src/tools/spasm-kernel" \
+	python3 "$spasmc" "$kernel_src/lib/math/gcd_spasm.spasm" \
+	--target spasm-kernel-x86_64 --out "$test_root/gcd_generated.S"
+
+# RET is a kernel assembly macro. The host harness only needs its plain
+# userspace equivalent and does not include kernel headers.
+sed '/^#include <asm\/nospec-branch.h>$/d' \
+	"$test_root/gcd_generated.S" >"$test_root/gcd_host.S"
+
+${HOSTCC:-cc} -O2 -Wall -Wextra -Werror -DRET=ret -DENDBR=endbr64 \
+	-Dgcd=spasm_gcd \
+	"$script_dir/gcd_equivalence.c" "$test_root/gcd_host.S" \
+	-o "$test_root/gcd_equivalence"
+
+"$test_root/gcd_equivalence"

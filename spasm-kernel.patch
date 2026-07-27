@@ -1,0 +1,329 @@
+diff --git a/lib/Kconfig b/lib/Kconfig
+index 2923924be..46d2cb8dc 100644
+--- a/lib/Kconfig
++++ b/lib/Kconfig
+@@ -8,6 +8,70 @@ config BINARY_PRINTF
+ 
+ menu "Library routines"
+ 
++choice
++	prompt "SpASM Kernel global migration mode"
++	default SPASM_KERNEL_MODE_SPASM
++	depends on X86_64
++
++config SPASM_KERNEL_MODE_C
++	bool "Original Linux C (all functions)"
++	help
++	  Use the original C implementations for all migrated functions.
++	  This is the safe fallback mode.
++
++config SPASM_KERNEL_MODE_SPASM
++	bool "SpASM (all migrated functions)"
++	help
++	  Replace all migrated functions with their SpASM implementations.
++	  Per-function overrides still available.
++
++config SPASM_KERNEL_MODE_DUAL
++	bool "Dual C/SpASM comparison"
++	help
++	  Execute both C and SpASM for every migrated function call.
++	  Return the SpASM result and report any mismatch.
++	  Intended for migration validation, not production.
++
++endchoice
++
++comment "Per-function overrides (when global mode is not sufficient)"
++
++choice
++	prompt "SpASM Kernel _bcd2bin implementation"
++	default SPASM_KERNEL_BCD_SPASM if SPASM_KERNEL_MODE_SPASM
++	default SPASM_KERNEL_BCD_DUAL if SPASM_KERNEL_MODE_DUAL
++	default SPASM_KERNEL_BCD_C
++	depends on X86_64
++
++config SPASM_KERNEL_BCD_C
++	bool "Original Linux C implementation"
++
++config SPASM_KERNEL_BCD_SPASM
++	bool "SpASM implementation"
++
++config SPASM_KERNEL_BCD_DUAL
++	bool "Dual C/SpASM comparison"
++
++endchoice
++
++choice
++	prompt "SpASM Kernel hex_to_bin implementation"
++	default SPASM_KERNEL_HEX_TO_BIN_SPASM if SPASM_KERNEL_MODE_SPASM
++	default SPASM_KERNEL_HEX_TO_BIN_DUAL if SPASM_KERNEL_MODE_DUAL
++	default SPASM_KERNEL_HEX_TO_BIN_C
++	depends on X86_64
++
++config SPASM_KERNEL_HEX_TO_BIN_C
++	bool "Original Linux C implementation"
++
++config SPASM_KERNEL_HEX_TO_BIN_SPASM
++	bool "SpASM implementation"
++
++config SPASM_KERNEL_HEX_TO_BIN_DUAL
++	bool "Dual C/SpASM comparison"
++
++endchoice
++
+ config RAID6_PQ
+ 	tristate
+ 
+diff --git a/lib/Makefile b/lib/Makefile
+index aaf677cf4..3a443f11f 100644
+--- a/lib/Makefile
++++ b/lib/Makefile
+@@ -50,7 +50,7 @@ lib-$(CONFIG_MIN_HEAP) += min_heap.o
+ lib-y	+= kobject.o klist.o
+ obj-y	+= lockref.o
+ 
+-obj-y += bcd.o sort.o parser.o debug_locks.o random32.o \
++obj-y += sort.o parser.o debug_locks.o random32.o \
+ 	 bust_spinlocks.o kasprintf.o bitmap.o scatterlist.o \
+ 	 list_sort.o uuid.o iov_iter.o clz_ctz.o \
+ 	 bsearch.o find_bit.o llist.o lwq.o memweight.o kfifo.o \
+@@ -59,6 +59,12 @@ obj-y += bcd.o sort.o parser.o debug_locks.o random32.o \
+ 	 generic-radix-tree.o bitmap-str.o
+ obj-y += string_helpers.o
+ obj-y += hexdump.o
++
++obj-$(CONFIG_SPASM_KERNEL_BCD_C) += bcd.o
++obj-$(CONFIG_SPASM_KERNEL_BCD_SPASM) += bcd.o bcd2bin_spasm.o bcd2bin_spasm_entry.o bcd2bin_export.o
++obj-$(CONFIG_SPASM_KERNEL_BCD_DUAL) += bcd.o bcd2bin_spasm.o bcd2bin_dual.o
++
++obj-$(CONFIG_SPASM_KERNEL_HEX_TO_BIN_SPASM) += hex_to_bin_spasm.o hex_to_bin_spasm_entry.o hex_to_bin_export.o
+ obj-$(CONFIG_TEST_HEXDUMP) += test_hexdump.o
+ obj-y += kstrtox.o
+ obj-$(CONFIG_FIND_BIT_BENCHMARK) += find_bit_benchmark.o
+diff --git a/lib/bcd.c b/lib/bcd.c
+index c5e79ba9c..a6e4b7305 100644
+--- a/lib/bcd.c
++++ b/lib/bcd.c
+@@ -2,11 +2,22 @@
+ #include <linux/bcd.h>
+ #include <linux/export.h>
+ 
++#include "bcd_spasm.h"
++
++#ifdef CONFIG_SPASM_KERNEL_BCD_SPASM
++unsigned __attribute__((weak)) _bcd2bin(unsigned char val)
++#elif defined(CONFIG_SPASM_KERNEL_BCD_DUAL)
++#define _bcd2bin spasm_bcd2bin_c
++unsigned _bcd2bin(unsigned char val)
++#else
+ unsigned _bcd2bin(unsigned char val)
++#endif
+ {
+ 	return (val & 0x0f) + (val >> 4) * 10;
+ }
++#if !defined(CONFIG_SPASM_KERNEL_BCD_SPASM) && !defined(CONFIG_SPASM_KERNEL_BCD_DUAL)
+ EXPORT_SYMBOL(_bcd2bin);
++#endif
+ 
+ unsigned char _bin2bcd(unsigned val)
+ {
+diff --git a/lib/hexdump.c b/lib/hexdump.c
+index c3db7c3a7..d867da99d 100644
+--- a/lib/hexdump.c
++++ b/lib/hexdump.c
+@@ -43,14 +43,20 @@ EXPORT_SYMBOL(hex_asc_upper);
+  *	uppercase and lowercase letters, so we use (ch & 0xdf), which converts
+  *	lowercase to uppercase
+  */
++#ifdef CONFIG_SPASM_KERNEL_HEX_TO_BIN_SPASM
++int __weak hex_to_bin(unsigned char ch)
++#else
+ int hex_to_bin(unsigned char ch)
++#endif
+ {
+ 	unsigned char cu = ch & 0xdf;
+ 	return -1 +
+ 		((ch - '0' +  1) & (unsigned)((ch - '9' - 1) & ('0' - 1 - ch)) >> 8) +
+ 		((cu - 'A' + 11) & (unsigned)((cu - 'F' - 1) & ('A' - 1 - cu)) >> 8);
+ }
++#ifndef CONFIG_SPASM_KERNEL_HEX_TO_BIN_SPASM
+ EXPORT_SYMBOL(hex_to_bin);
++#endif
+ 
+ /**
+  * hex2bin - convert an ascii hexadecimal string to its binary representation
+diff --git a/lib/math/Kconfig b/lib/math/Kconfig
+index 0634b428d..d2158653e 100644
+--- a/lib/math/Kconfig
++++ b/lib/math/Kconfig
+@@ -1,4 +1,40 @@
+ # SPDX-License-Identifier: GPL-2.0-only
++choice
++	prompt "SpASM Kernel gcd implementation"
++	default SPASM_KERNEL_GCD_SPASM if SPASM_KERNEL_MODE_SPASM
++	default SPASM_KERNEL_GCD_DUAL if SPASM_KERNEL_MODE_DUAL
++	default SPASM_KERNEL_GCD_C
++	depends on X86_64
++
++config SPASM_KERNEL_GCD_C
++	bool "Original Linux C implementation"
++
++config SPASM_KERNEL_GCD_SPASM
++	bool "SpASM implementation"
++
++config SPASM_KERNEL_GCD_DUAL
++	bool "Dual C/SpASM comparison"
++
++endchoice
++
++choice
++	prompt "SpASM Kernel int_sqrt implementation"
++	default SPASM_KERNEL_INT_SQRT_SPASM if SPASM_KERNEL_MODE_SPASM
++	default SPASM_KERNEL_INT_SQRT_DUAL if SPASM_KERNEL_MODE_DUAL
++	default SPASM_KERNEL_INT_SQRT_C
++	depends on X86_64
++
++config SPASM_KERNEL_INT_SQRT_C
++	bool "Original Linux C implementation"
++
++config SPASM_KERNEL_INT_SQRT_SPASM
++	bool "SpASM implementation"
++
++config SPASM_KERNEL_INT_SQRT_DUAL
++	bool "Dual C/SpASM comparison"
++
++endchoice
++
+ config CORDIC
+ 	tristate "CORDIC algorithm"
+ 	help
+diff --git a/lib/math/Makefile b/lib/math/Makefile
+index d1caba23b..0f45b5b57 100644
+--- a/lib/math/Makefile
++++ b/lib/math/Makefile
+@@ -1,5 +1,13 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+-obj-y += div64.o gcd.o lcm.o int_log.o int_pow.o int_sqrt.o reciprocal_div.o
++obj-y += div64.o lcm.o int_log.o int_pow.o reciprocal_div.o
++
++obj-$(CONFIG_SPASM_KERNEL_GCD_C) += gcd.o
++obj-$(CONFIG_SPASM_KERNEL_GCD_SPASM) += gcd_spasm.o gcd_spasm_entry.o gcd_export.o
++obj-$(CONFIG_SPASM_KERNEL_GCD_DUAL) += gcd.o gcd_spasm.o gcd_dual.o
++
++obj-$(CONFIG_SPASM_KERNEL_INT_SQRT_C) += int_sqrt.o
++obj-$(CONFIG_SPASM_KERNEL_INT_SQRT_SPASM) += int_sqrt_spasm.o int_sqrt_spasm_entry.o int_sqrt_export.o
++obj-$(CONFIG_SPASM_KERNEL_INT_SQRT_DUAL) += int_sqrt.o int_sqrt_spasm.o int_sqrt_dual.o
+ 
+ obj-$(CONFIG_CORDIC)		+= cordic.o
+ obj-$(CONFIG_PRIME_NUMBERS)	+= prime_numbers.o
+diff --git a/lib/math/gcd.c b/lib/math/gcd.c
+index 62efca678..e567023c5 100644
+--- a/lib/math/gcd.c
++++ b/lib/math/gcd.c
+@@ -3,6 +3,12 @@
+ #include <linux/gcd.h>
+ #include <linux/export.h>
+ 
++#include "gcd_spasm.h"
++
++#ifdef CONFIG_SPASM_KERNEL_GCD_DUAL
++#define gcd spasm_gcd_c
++#endif
++
+ /*
+  * This implements the binary GCD algorithm. (Often attributed to Stein,
+  * but as Knuth has noted, appears in a first-century Chinese math text.)
+@@ -85,4 +91,6 @@ unsigned long gcd(unsigned long a, unsigned long b)
+ 	}
+ }
+ 
++#ifndef CONFIG_SPASM_KERNEL_GCD_DUAL
+ EXPORT_SYMBOL_GPL(gcd);
++#endif
+diff --git a/lib/math/int_sqrt.c b/lib/math/int_sqrt.c
+index a8170bb91..29b732301 100644
+--- a/lib/math/int_sqrt.c
++++ b/lib/math/int_sqrt.c
+@@ -11,6 +11,12 @@
+ #include <linux/limits.h>
+ #include <linux/math.h>
+ 
++#include "int_sqrt_spasm.h"
++
++#ifdef CONFIG_SPASM_KERNEL_INT_SQRT_DUAL
++#define int_sqrt spasm_int_sqrt_c
++#endif
++
+ /**
+  * int_sqrt - computes the integer square root
+  * @x: integer of which to calculate the sqrt
+@@ -38,7 +44,9 @@ unsigned long int_sqrt(unsigned long x)
+ 
+ 	return y;
+ }
++#ifndef CONFIG_SPASM_KERNEL_INT_SQRT_DUAL
+ EXPORT_SYMBOL(int_sqrt);
++#endif
+ 
+ #if BITS_PER_LONG < 64
+ /**
+diff --git a/scripts/Makefile.build b/scripts/Makefile.build
+index 32e209bc7..0599959de 100644
+--- a/scripts/Makefile.build
++++ b/scripts/Makefile.build
+@@ -431,6 +431,20 @@ endif
+ $(obj)/%.o: $(obj)/%.S FORCE
+ 	$(call if_changed_rule,as_o_S)
+ 
++# SpASM is a first-class Kbuild source. The generated assembly is retained so
++# diagnostics and binary audits can be traced back to the compiler output.
++spasm-tool-deps := \
++	$(wildcard $(SPASMC)) \
++	$(wildcard $(SPASM_TARGET_PATH)/spasm-kmod-native.py) \
++	$(SPASM_TARGET_PATH)/spasm-target-$(SPASM_TARGET)
++
++$(obj)/%.o: $(src)/%.spasm $(spasm-tool-deps) FORCE
++	$(call if_changed_rule,spasm_o)
++
++spasm-objs := $(foreach o,$(real-obj-y) $(real-obj-m) $(lib-y), \
++	$(if $(wildcard $(patsubst $(obj)/%.o,$(src)/%.spasm,$(o))),$(o)))
++targets += $(patsubst %.o,%.spasm.S,$(spasm-objs))
++
+ targets += $(filter-out $(subdir-builtin), $(real-obj-y))
+ targets += $(filter-out $(subdir-modorder), $(real-obj-m))
+ targets += $(lib-y) $(always-y)
+diff --git a/scripts/Makefile.lib b/scripts/Makefile.lib
+index 28a1c08e3..fb453c5f2 100644
+--- a/scripts/Makefile.lib
++++ b/scripts/Makefile.lib
+@@ -264,6 +264,31 @@ define rule_as_o_S
+ 	$(call cmd,warn_shared_object)
+ endef
+ 
++# Compile SpASM sources (.spasm)
++# ---------------------------------------------------------------------------
++#
++# SPASMC is deliberately supplied by the caller. This keeps Kbuild independent
++# of a developer's filesystem while allowing an explicit path to the compiler
++# script.
++SPASMC		   ?= spasmc
++SPASM_TARGET	   ?= spasm-kernel-x86_64
++SPASM_TARGET_PATH ?= $(srctree)/tools/spasm-kernel
++
++spasm_asm = $(@:.o=.spasm.S)
++
++quiet_cmd_spasm_o = SPASM $(quiet_modtag) $@
++      cmd_spasm_o = SPASMC_TARGET_PATH=$(SPASM_TARGET_PATH) \
++		    $(PYTHON3) $(SPASMC) $< --target $(SPASM_TARGET) \
++		    --out $(spasm_asm) && \
++		    $(CC) $(a_flags) -c -o $@ $(spasm_asm) $(cmd_objtool)
++
++define rule_spasm_o
++	$(call cmd_and_fixdep,spasm_o)
++	$(call cmd,gen_objtooldep)
++	$(call cmd,gen_symversions_S)
++	$(call cmd,warn_shared_object)
++endef
++
+ # Copy a file
+ # ===========================================================================
+ # 'cp' preserves permissions. If you use it to copy a file in read-only srctree,

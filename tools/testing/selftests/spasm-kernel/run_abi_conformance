@@ -1,0 +1,18 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-only
+set -euo pipefail
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
+project_parent=$(CDPATH= cd -- "$kernel_src/.." && pwd)
+kernel_build=${KERNEL_BUILD:-"$project_parent/build-spasm-kernel-gcd"}
+spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
+
+PATH="$kernel_src/tools/spasm-kernel/host-tools:$PATH" \
+	make -C "$kernel_src" O="$kernel_build" ARCH=x86_64 \
+	SPASMC="$spasmc" -j"${JOBS:-8}" lib/math/
+
+PATH="$kernel_src/tools/spasm-kernel/host-tools:$PATH" \
+	KERNEL_BUILD="$kernel_build" "$kernel_src/tools/spasm-kernel/project" module
+
+python3 "$script_dir/abi_conformance.py" --kernel-build "$kernel_build"

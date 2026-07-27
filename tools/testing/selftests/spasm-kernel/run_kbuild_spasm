@@ -1,0 +1,87 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
+project_parent=$(CDPATH= cd -- "$kernel_src/.." && pwd)
+kernel_build=${KERNEL_BUILD:-"$project_parent/build-nice-spasm-gcd"}
+spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
+host_tools="$kernel_src/tools/spasm-kernel/host-tools"
+object="$kernel_build/lib/math/gcd_spasm.o"
+assembly="$kernel_build/lib/math/gcd_spasm.spasm.S"
+command_file="$kernel_build/lib/math/.gcd_spasm.o.cmd"
+test_root=$(mktemp -d)
+trap 'rm -rf -- "$test_root"' EXIT
+
+die()
+{
+	echo "not ok - $*" >&2
+	exit 1
+}
+
+[ -f "$kernel_build/.config" ] || die "falta $kernel_build/.config"
+[ -f "$spasmc" ] || die "no existe el compilador: $spasmc"
+grep -q '^CONFIG_SPASM_KERNEL_GCD_SPASM=y$' "$kernel_build/.config" ||
+	die "CONFIG_SPASM_KERNEL_GCD_SPASM no esta habilitado"
+
+build_object()
+{
+	PATH="$host_tools:$PATH" make -s -C "$kernel_src" \
+		O="$kernel_build" ARCH=x86_64 SPASMC="$spasmc" \
+		lib/math/gcd_spasm.o
+}
+
+build_object
+[ -s "$object" ] || die "Kbuild no produjo gcd_spasm.o"
+[ -s "$assembly" ] || die "Kbuild no conservo gcd_spasm.spasm.S"
+[ -s "$command_file" ] || die "Kbuild no registro el comando incremental"
+
+grep -q 'gcd_spasm.spasm' "$command_file" ||
+	die "la fuente .spasm no figura en el comando Kbuild"
+grep -q "$spasmc" "$command_file" ||
+	die "Kbuild no invoco el compilador seleccionado"
+
+before=$(stat -c '%Y' "$object")
+build_object
+after=$(stat -c '%Y' "$object")
+[ "$before" = "$after" ] ||
+	die "una segunda ejecucion recompilo un objeto sin cambios"
+echo "ok - kbuild_incremental"
+
+first_object=$(sha256sum "$object" | cut -d' ' -f1)
+first_assembly=$(sha256sum "$assembly" | cut -d' ' -f1)
+touch -r "$kernel_src/lib/math/gcd_spasm.spasm" "$test_root/source.timestamp"
+touch -r "$object" "$test_root/object.timestamp"
+touch -r "$assembly" "$test_root/assembly.timestamp"
+touch -r "$command_file" "$test_root/command.timestamp"
+touch "$kernel_src/lib/math/gcd_spasm.spasm"
+build_object
+second_object=$(sha256sum "$object" | cut -d' ' -f1)
+second_assembly=$(sha256sum "$assembly" | cut -d' ' -f1)
+[ "$first_object" = "$second_object" ] ||
+	die "el objeto no es reproducible"
+[ "$first_assembly" = "$second_assembly" ] ||
+	die "el ensamblado generado no es reproducible"
+touch -r "$test_root/source.timestamp" "$kernel_src/lib/math/gcd_spasm.spasm"
+touch -r "$test_root/object.timestamp" "$object"
+touch -r "$test_root/assembly.timestamp" "$assembly"
+touch -r "$test_root/command.timestamp" "$command_file"
+echo "ok - deterministic_rebuild"
+
+readelf -Ws "$object" |
+	grep -Eq 'GLOBAL[[:space:]]+DEFAULT.*[[:space:]]spasm_gcd$' ||
+	die "spasm_gcd no es GLOBAL DEFAULT"
+if readelf -Ws "$object" | grep -Eq '[[:space:]](init_module|cleanup_module)$'; then
+	die "el objeto builtin contiene simbolos reservados de modulo"
+fi
+cp "$object" "$test_root/gcd_spasm.o"
+"$kernel_build/tools/objtool/objtool" --stackval --orc --rethunk --sls \
+	--dry-run --werror "$test_root/gcd_spasm.o"
+if [ -f "$kernel_build/vmlinux" ]; then
+	readelf -S "$kernel_build/vmlinux" | grep -q '\.orc_unwind' ||
+		die "vmlinux no contiene metadatos ORC"
+fi
+echo "ok - elf_objtool_contract"
+
+echo "KBUILD SPASM: 3/3 pruebas correctas"

@@ -1,0 +1,163 @@
+module "spasm_hello"
+license "GPL"
+author "Martin Alejandro Oviedo"
+description "Primer modulo nativo SpASM del proyecto SpASM Kernel"
+
+extern fn gcd(a: usize, b: usize) -> usize
+
+fn sumar(a: i64, b: i64) -> i64 {
+	return a + b;
+}
+
+fn multiplicar_u32(a: u32, b: u32) -> u32 {
+	return a * b;
+}
+
+fn identidad_buffer(buffer: ptr<u8>) -> ptr<u8> {
+	return buffer;
+}
+
+fn spasm_gcd_internal(a: usize, b: usize) -> usize {
+	var resto: usize = 0;
+	while (b != 0) {
+		resto = a % b;
+		a = b;
+		b = resto;
+	}
+	return a;
+}
+
+on load {
+	klog("SpASM Kernel: SpASM nativo activo en Ring 0")
+	recurso buffer = kalloc<u8>(256) else return -ENOMEM
+	guardar<u32>(buffer, 4, 424242);
+	var lectura: u32 = cargar<u32>(buffer, 4);
+	if (lectura == 424242) {
+		klog("Memoria tipada SpASM comprobada")
+	}
+	var indice: usize = 8;
+	guardar<u16>(buffer, indice, 1234);
+	var lectura_dinamica: u16 = cargar<u16>(buffer, indice);
+	if (lectura_dinamica == 1234) {
+		klog("Indice dinamico SpASM comprobado")
+	}
+	usar buffer
+	klog("Memoria nativa SpASM asignada y utilizada")
+	var alias: ptr<u8> = identidad_buffer(buffer);
+	if (alias == buffer) {
+		klog("Puntero tipado SpASM correcto")
+	}
+	liberar buffer
+	klog("Memoria nativa SpASM liberada")
+	var estado = 40;
+	estado = estado + 2;
+	if (estado == 42) {
+		klog("Condicional SpASM nativo correcto")
+	} else {
+		klog("Condicional SpASM nativo incorrecto")
+	}
+	var iteracion = 0;
+	var potencia = 1;
+	while (iteracion < 5) {
+		potencia = potencia * 2;
+		iteracion = iteracion + 1;
+	}
+	if (potencia == 32) {
+		klog("Bucle SpASM nativo correcto")
+	} else {
+		klog("Bucle SpASM nativo incorrecto")
+	}
+	var cociente = 84 / 2;
+	var resto = 85 % 2;
+	if (cociente == 42) {
+		if (resto == 1) {
+			klog("Division y modulo SpASM correctos")
+		}
+	}
+	var resultado: i64 = sumar(40, 2);
+	var producto: u32 = multiplicar_u32(6, 7);
+	if (resultado == 42) {
+		if (producto == 42) {
+			klog("Funciones y tipos SpASM correctos")
+		}
+	}
+	var gcd_ok: usize = 0;
+	var gcd_linux: usize = gcd(1071, 462);
+	var gcd_spasm: usize = spasm_gcd_internal(1071, 462);
+	if (gcd_linux == gcd_spasm) {
+		if (gcd_spasm == 21) {
+			gcd_ok = gcd_ok + 1;
+		}
+	}
+	gcd_linux = gcd(48, 18);
+	gcd_spasm = spasm_gcd_internal(48, 18);
+	if (gcd_linux == gcd_spasm) {
+		if (gcd_spasm == 6) {
+			gcd_ok = gcd_ok + 1;
+		}
+	}
+	gcd_linux = gcd(17, 13);
+	gcd_spasm = spasm_gcd_internal(17, 13);
+	if (gcd_linux == gcd_spasm) {
+		if (gcd_spasm == 1) {
+			gcd_ok = gcd_ok + 1;
+		}
+	}
+	gcd_linux = gcd(0, 25);
+	gcd_spasm = spasm_gcd_internal(0, 25);
+	if (gcd_linux == gcd_spasm) {
+		if (gcd_spasm == 25) {
+			gcd_ok = gcd_ok + 1;
+		}
+	}
+	gcd_linux = gcd(0, 0);
+	gcd_spasm = spasm_gcd_internal(0, 0);
+	if (gcd_linux == gcd_spasm) {
+		if (gcd_spasm == 0) {
+			gcd_ok = gcd_ok + 1;
+		}
+	}
+	gcd_linux = gcd(18446744073709551615, 0);
+	gcd_spasm = spasm_gcd_internal(18446744073709551615, 0);
+	if (gcd_linux == gcd_spasm) {
+		if (gcd_spasm == 18446744073709551615) {
+			gcd_ok = gcd_ok + 1;
+		}
+	}
+	gcd_linux = gcd(18446744073709551615, 18446744073709551614);
+	gcd_spasm = spasm_gcd_internal(18446744073709551615, 18446744073709551614);
+	if (gcd_linux == gcd_spasm) {
+		if (gcd_spasm == 1) {
+			gcd_ok = gcd_ok + 1;
+		}
+	}
+	gcd_linux = gcd(9223372036854775808, 4611686018427387904);
+	gcd_spasm = spasm_gcd_internal(9223372036854775808, 4611686018427387904);
+	if (gcd_linux == gcd_spasm) {
+		if (gcd_spasm == 4611686018427387904) {
+			gcd_ok = gcd_ok + 1;
+		}
+	}
+	gcd_linux = gcd(7540113804746346429, 4660046610375530309);
+	gcd_spasm = spasm_gcd_internal(7540113804746346429, 4660046610375530309);
+	if (gcd_linux == gcd_spasm) {
+		if (gcd_spasm == 1) {
+			gcd_ok = gcd_ok + 1;
+		}
+	}
+	gcd_linux = gcd(4294967296, 65536);
+	gcd_spasm = spasm_gcd_internal(4294967296, 65536);
+	if (gcd_linux == gcd_spasm) {
+		if (gcd_spasm == 65536) {
+			gcd_ok = gcd_ok + 1;
+		}
+	}
+	if (gcd_ok == 10) {
+		klog("Equivalencia Linux gcd y SpASM correcta")
+	}
+	return 0
+}
+
+on unload {
+	klog("SpASM nativo descargado")
+}
