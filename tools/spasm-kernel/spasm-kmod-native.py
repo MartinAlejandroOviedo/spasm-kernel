@@ -120,7 +120,7 @@ TYPE_WIDTHS = {
     "usize": 8,
     "isize": 8,
 }
-ABI_V2_EXPORTED_TYPES = {"u64", "i64", "usize", "isize"}
+ABI_V2_EXPORTED_TYPES = {"u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64", "usize", "isize", "bool"}
 KERNEL_EXTERN_ALLOWLIST = {
     "gcd": (("usize", "usize"), "usize"),
 }
