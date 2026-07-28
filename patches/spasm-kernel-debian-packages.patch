@@ -1,0 +1,150 @@
+diff --git a/scripts/package/builddeb b/scripts/package/builddeb
+index 3627ca227..1c0164695 100644
+--- a/scripts/package/builddeb
++++ b/scripts/package/builddeb
+@@ -32,7 +32,7 @@ install_linux_image () {
+ 
+ 	# Only some architectures with OF support have this target
+ 	if is_enabled CONFIG_OF_EARLY_FLATTREE && [ -d "${srctree}/arch/${SRCARCH}/boot/dts" ]; then
+-		${MAKE} -f ${srctree}/Makefile INSTALL_DTBS_PATH="${pdir}/usr/lib/linux-image-${KERNELRELEASE}" dtbs_install
++		${MAKE} -f ${srctree}/Makefile INSTALL_DTBS_PATH="${pdir}/usr/lib/spasm-kernel-image-${KERNELRELEASE}" dtbs_install
+ 	fi
+ 
+ 	${MAKE} -f ${srctree}/Makefile INSTALL_MOD_PATH="${pdir}" INSTALL_MOD_STRIP=1 modules_install
+@@ -137,12 +137,12 @@ install_linux_image_dbg () {
+ 
+ install_kernel_headers () {
+ 	pdir=debian/$1
+-	version=${1#linux-headers-}
++	version=${1#spasm-kernel-headers-}
+ 
+-	CC="${DEB_HOST_GNU_TYPE}-gcc" "${srctree}/scripts/package/install-extmod-build" "${pdir}/usr/src/linux-headers-${version}"
++	CC="${DEB_HOST_GNU_TYPE}-gcc" "${srctree}/scripts/package/install-extmod-build" "${pdir}/usr/src/spasm-kernel-headers-${version}"
+ 
+ 	mkdir -p $pdir/lib/modules/$version/
+-	ln -s /usr/src/linux-headers-$version $pdir/lib/modules/$version/build
++	ln -s /usr/src/spasm-kernel-headers-$version $pdir/lib/modules/$version/build
+ }
+ 
+ install_libc_headers () {
+@@ -161,10 +161,10 @@ package=$1
+ case "${package}" in
+ *-dbg)
+ 	install_linux_image_dbg "${package}";;
+-linux-image-*|user-mode-linux-*)
++spasm-kernel-image-*|user-mode-linux-*)
+ 	install_linux_image "${package}";;
+-linux-libc-dev)
++spasm-kernel-libc-dev)
+ 	install_libc_headers "${package}";;
+-linux-headers-*)
++spasm-kernel-headers-*)
+ 	install_kernel_headers "${package}";;
+ esac
+diff --git a/scripts/package/debian/rules b/scripts/package/debian/rules
+index a417a7f8b..054cad2eb 100644
+--- a/scripts/package/debian/rules
++++ b/scripts/package/debian/rules
+@@ -30,10 +30,10 @@ make-opts = ARCH=$(ARCH) KERNELRELEASE=$(KERNELRELEASE) \
+ binary-targets := $(addprefix binary-, image image-dbg headers libc-dev)
+ 
+ all-packages = $(shell dh_listpackages)
+-image-package = $(filter linux-image-% user-%, $(filter-out %-dbg, $(all-packages)))
++image-package = $(filter spasm-kernel-image-% user-%, $(filter-out %-dbg, $(all-packages)))
+ image-dbg-package = $(filter %-dbg, $(all-packages))
+-libc-dev-package = $(filter linux-libc-dev, $(all-packages))
+-headers-package = $(filter linux-headers-%, $(all-packages))
++libc-dev-package = $(filter spasm-kernel-libc-dev, $(all-packages))
++headers-package = $(filter spasm-kernel-headers-%, $(all-packages))
+ 
+ mk-files = $(patsubst binary-%,debian/%.files,$1)
+ package = $($(@:binary-%=%-package))
+diff --git a/scripts/package/mkdebian b/scripts/package/mkdebian
+index d4b007b38..bf3c882b1 100644
+--- a/scripts/package/mkdebian
++++ b/scripts/package/mkdebian
+@@ -164,12 +164,12 @@ else
+ 	debian_revision=$("${srctree}/scripts/build-version")
+ 	packageversion=${upstream_version}-${debian_revision}
+ fi
+-sourcename=${KDEB_SOURCENAME:-linux-upstream}
++sourcename=${KDEB_SOURCENAME:-spasm-kernel}
+ 
+ if [ "$ARCH" = "um" ] ; then
+ 	packagename=user-mode-linux
+ else
+-	packagename=linux-image
++	packagename=spasm-kernel-image
+ fi
+ 
+ debarch=
+@@ -195,7 +195,7 @@ host_gnu=$(dpkg-architecture -a "${debarch}" -q DEB_HOST_GNU_TYPE | sed 's/_/-/g
+ cat <<EOF > debian/changelog
+ $sourcename ($packageversion) $distribution; urgency=low
+ 
+-  * Custom built Linux kernel.
++  * Custom built spasm-kernel.
+ 
+  -- $maintainer  $(date -R)
+ EOF
+@@ -213,36 +213,36 @@ Build-Depends-Arch: bc, bison, flex,
+  kmod, libdw-dev:native, libelf-dev:native,
+  libssl-dev:native, libssl-dev <!pkg.${sourcename}.nokernelheaders>,
+  python3:native, rsync
+-Homepage: https://www.kernel.org/
++Homepage: https://github.com/MartinAlejandroOviedo/spasm-kernel
+ 
+ Package: $packagename-${KERNELRELEASE}
+ Architecture: $debarch
+-Description: Linux kernel, version ${KERNELRELEASE}
+- This package contains the Linux kernel, modules and corresponding other
++Description: spasm-kernel image, version ${KERNELRELEASE}
++ This package contains the spasm-kernel image, modules and corresponding
+  files, version: ${KERNELRELEASE}.
+ EOF
+ 
+ if [ "${SRCARCH}" != um ]; then
+ cat <<EOF >> debian/control
+ 
+-Package: linux-libc-dev
++Package: spasm-kernel-libc-dev
+ Section: devel
+ Provides: linux-kernel-headers
+ Architecture: $debarch
+-Description: Linux support headers for userspace development
+- This package provides userspaces headers from the Linux kernel.  These headers
+- are used by the installed headers for GNU glibc and other system libraries.
++Description: spasm-kernel support headers for userspace development
++ This package provides userspace headers from spasm-kernel. These headers are
++ used by the installed headers for GNU glibc and other system libraries.
+ Multi-Arch: same
+ EOF
+ 
+ if is_enabled CONFIG_MODULES; then
+ cat <<EOF >> debian/control
+ 
+-Package: linux-headers-${KERNELRELEASE}
++Package: spasm-kernel-headers-${KERNELRELEASE}
+ Architecture: $debarch
+ Build-Profiles: <!pkg.${sourcename}.nokernelheaders>
+-Description: Linux kernel headers for ${KERNELRELEASE} on $debarch
+- This package provides kernel header files for ${KERNELRELEASE} on $debarch
++Description: spasm-kernel headers for ${KERNELRELEASE} on $debarch
++ This package provides spasm-kernel header files for ${KERNELRELEASE} on $debarch
+  .
+  This is useful for people who need to build external modules
+ EOF
+@@ -252,11 +252,11 @@ fi
+ if is_enabled CONFIG_DEBUG_INFO; then
+ cat <<EOF >> debian/control
+ 
+-Package: linux-image-${KERNELRELEASE}-dbg
++Package: spasm-kernel-image-${KERNELRELEASE}-dbg
+ Section: debug
+ Architecture: $debarch
+ Build-Profiles: <!pkg.${sourcename}.nokerneldbg>
+-Description: Linux kernel debugging symbols for ${KERNELRELEASE}
++Description: spasm-kernel debugging symbols for ${KERNELRELEASE}
+  This package will come in handy if you need to debug the kernel. It provides
+  all the necessary debug symbols for the kernel and its modules.
+ EOF

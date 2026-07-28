@@ -1,9 +1,10 @@
-# SpASM Kernel
+# spasm-kernel
 
-![SpASM Kernel](img/spasm-kernel.png)
+![spasm-kernel](img/spasm-kernel.png)
 
-Overlay para reemplazar funciones del kernel Linux 6.19.14 x86_64
-con implementaciones en SpASM.
+Kernel x86_64 basado en Linux 6.19.14 que reemplaza funciones con
+implementaciones en SpASM sin cambiar los contratos que consumen Kbuild,
+el resto del kernel, sus módulos ni el espacio de usuario.
 
 **Repo:** https://github.com/MartinAlejandroOviedo/spasm-kernel
 **Release:** https://github.com/MartinAlejandroOviedo/spasm-kernel/releases
@@ -14,9 +15,9 @@ con implementaciones en SpASM.
 ## Instalar desde release (recomendado)
 
 ```sh
-wget https://github.com/MartinAlejandroOviedo/spasm-kernel/releases/download/v0.1.0/linux-image-6.19.14-spasm-kernel-*.deb
-wget https://github.com/MartinAlejandroOviedo/spasm-kernel/releases/download/v0.1.0/linux-headers-6.19.14-spasm-kernel-*.deb
-sudo dpkg -i linux-image-6.19.14-spasm-kernel-*.deb linux-headers-6.19.14-spasm-kernel-*.deb
+wget https://github.com/MartinAlejandroOviedo/spasm-kernel/releases/download/v0.1.0/spasm-kernel-image-6.19.14-spasm-kernel_0.1.0-1_amd64.deb
+wget https://github.com/MartinAlejandroOviedo/spasm-kernel/releases/download/v0.1.0/spasm-kernel-headers-6.19.14-spasm-kernel_0.1.0-1_amd64.deb
+sudo dpkg -i spasm-kernel-image-6.19.14-spasm-kernel_0.1.0-1_amd64.deb spasm-kernel-headers-6.19.14-spasm-kernel_0.1.0-1_amd64.deb
 sudo reboot
 ```
 
@@ -43,6 +44,7 @@ git clone https://github.com/MartinAlejandroOviedo/spasm-kernel.git overlay
 
 # 2. Aplicar parche a archivos existentes del kernel
 git apply overlay/spasm-kernel.patch
+git apply overlay/patches/spasm-kernel-debian-packages.patch
 
 # 3. Copiar archivos nuevos del overlay
 cp -r overlay/* .
@@ -68,7 +70,8 @@ spasm-kernel/
 │   └── testing/selftests/spasm-kernel/  # Tests
 ├── docs/spasm-kernel/        # Documentación
 ├── samples/spasm/            # Módulo ejemplo
-└── SPASM-KERNEL.md           # Documentación principal
+├── patches/                  # Integración adicional con el árbol Linux
+└── spasm-kernel.md           # Documentación principal
 ```
 
 ---
@@ -94,4 +97,19 @@ KERNEL_BUILD=/ruta/build \
 
 ---
 
-**Dependencia:** [spasmc](https://github.com/quamagi/spasm) — compilador SpASM.
+## Paquetes Debian
+
+La identidad pública de los paquetes también es `spasm-kernel`:
+
+- `spasm-kernel-image-<versión>_<revisión>_amd64.deb`
+- `spasm-kernel-headers-<versión>_<revisión>_amd64.deb`
+- `spasm-kernel-libc-dev_<revisión>_amd64.deb`
+- `spasm-kernel-image-<versión>-dbg_<revisión>_amd64.deb`, cuando corresponde
+
+Los nombres compatibles con Linux que aparecen dentro del sistema de módulos
+se conservan únicamente donde forman parte de la ABI o de la integración
+esperada por Debian.
+
+---
+
+**Dependencia:** compilador propio SpASM (`tools/spasmc.py` en el proyecto SpASM).

@@ -1,7 +1,7 @@
-# Initramfs de desarrollo de SpASM Kernel
+# Initramfs de desarrollo de spasm-kernel
 
 Este initramfs proporciona una consola mínima y una prueba automática para el
-kernel x86_64 del proyecto SpASM Kernel, basado en la filosofía *Machine and
+kernel x86_64 del proyecto spasm-kernel, basado en la filosofía *Machine and
 User Care*. Su comportamiento se configura desde la línea de comandos del
 kernel, sin reconstruir el archivo. El prefijo técnico `spasm.*` se conserva
 porque identifica la interfaz de la cadena de herramientas SpASM.

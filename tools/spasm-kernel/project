@@ -26,7 +26,7 @@ need_file()
 
 show_status()
 {
-	echo "Proyecto:  SpASM Kernel"
+	echo "Proyecto:  spasm-kernel"
 	echo "Filosofia: Machine and User Care"
 	echo "Fuentes:   $kernel_src"
 	echo "Build:     $kernel_build"

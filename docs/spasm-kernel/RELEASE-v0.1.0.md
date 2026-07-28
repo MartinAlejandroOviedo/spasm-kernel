@@ -1,4 +1,4 @@
-# SpASM Kernel — Release v0.1.0
+# spasm-kernel — Release v0.1.0
 
 **Filosofía:** Machine and User Care.
 **Kernel base:** Linux 6.19.14
@@ -13,9 +13,9 @@
 |---|---|
 | `bzImage-spasm-kernel` | Kernel comprimido listo para arrancar |
 | `config-spasm-kernel` | Configuración Kconfig utilizada |
-| `linux-image-*.deb` | Paquete Debian instalable |
-| `linux-headers-*.deb` | Headers para compilar módulos |
-| `linux-libc-dev_*.deb` | Biblioteca C de desarrollo |
+| `spasm-kernel-image-*.deb` | Imagen y módulos instalables |
+| `spasm-kernel-headers-*.deb` | Headers para compilar módulos |
+| `spasm-kernel-libc-dev_*.deb` | Headers para desarrollo en espacio de usuario |
 
 ---
 
@@ -23,7 +23,7 @@
 
 ```sh
 # Opción 1: .deb
-sudo dpkg -i linux-image-*.deb linux-headers-*.deb
+sudo dpkg -i spasm-kernel-image-*.deb spasm-kernel-headers-*.deb
 sudo update-grub
 sudo reboot
 
@@ -68,7 +68,7 @@ CONFIG_SPASM_KERNEL_MODE_C=y
 
 ```sh
 cd linux-6.19.14
-KERNEL_BUILD=../build-nice-spasm-gcd \
+KERNEL_BUILD=../build-spasm-kernel \
   tools/testing/selftests/spasm-kernel/verify-all
 ```
 
@@ -77,7 +77,7 @@ KERNEL_BUILD=../build-nice-spasm-gcd \
 ## Estructura del proyecto
 
 ```
-linux-6.19.14/           # Kernel Linux 6.19.14 + SpASM Kernel
+linux-6.19.14/           # Kernel Linux 6.19.14 + spasm-kernel
 ├── lib/
 │   ├── math/
 │   │   ├── gcd_spasm.spasm       # gcd en SpASM

@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# SpASM Kernel — Verificación integral de migración
+# spasm-kernel — Verificación integral de migración
 #
 # Valida:
 #   1. Compilación de .spasm → .o (kbuild-test)
@@ -19,7 +19,7 @@ set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
-kernel_build=${KERNEL_BUILD:-"$kernel_src/../build-nice-spasm-gcd"}
+kernel_build=${KERNEL_BUILD:-"$kernel_src/../build-spasm-kernel"}
 spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
 host_tools="$kernel_src/tools/spasm-kernel/host-tools"
 bzimage="$kernel_build/arch/x86/boot/bzImage"
@@ -37,7 +37,7 @@ die() { echo "FATAL: $*"; exit 1; }
 need_file() { [ -f "$1" ] || die "no existe: $1"; }
 
 # ---------------------------------------------------------------------------
-echo "=== SpASM Kernel — Verificación integral ==="
+echo "=== spasm-kernel — Verificación integral ==="
 echo "Fuentes : $kernel_src"
 echo "Build   : $kernel_build"
 echo "SpASM   : $spasmc"
@@ -67,7 +67,7 @@ fi
 
 # 3. Dual mode (build dual config and verify)
 echo "--- 3. Dual C/SpASM ---"
-dual_build="$kernel_build/../build-nice-dual-gcd"
+dual_build="$kernel_build/../build-spasm-kernel-dual"
 if [ -f "$dual_build/.config" ]; then
     if PATH="$host_tools:$PATH" \
        KERNEL_BUILD="$dual_build" SPASMC="$spasmc" \

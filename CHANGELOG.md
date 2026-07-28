@@ -1,8 +1,19 @@
 # Changelog
 
+## Sin publicar
+
+### Cambiado
+
+- Unificada la identidad pública bajo el nombre exacto `spasm-kernel`.
+- Renombrados los paquetes Debian a `spasm-kernel-image`,
+  `spasm-kernel-headers` y `spasm-kernel-libc-dev`.
+- Actualizados README, documentación, instaladores, mensajes y rutas de build.
+- Agregada la integración Debian que conserva la compatibilidad técnica con
+  el ecosistema Linux sin exponer nombres genéricos en los paquetes.
+
 ## v0.1.0 (2026-07-27)
 
-### Primera versión del SpASM Kernel
+### Primera versión de spasm-kernel
 
 - **4 funciones migradas a SpASM:**
   - `gcd` — algoritmo de máximo común divisor (Stein binario)

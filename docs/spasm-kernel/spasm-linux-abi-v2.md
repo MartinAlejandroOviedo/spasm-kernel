@@ -2,7 +2,7 @@
 
 ## Estado y alcance
 
-Este documento es la norma ejecutable de Fase 2 para funciones de SpASM Kernel
+Este documento es la norma ejecutable de Fase 2 para funciones de spasm-kernel
 compiladas desde SpASM. Define qué debe observar Linux sin depender del lenguaje
 fuente. Aplica al target:
 

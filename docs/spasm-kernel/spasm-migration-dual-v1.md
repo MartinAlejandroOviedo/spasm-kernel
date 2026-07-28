@@ -55,7 +55,7 @@ módulos y herramientas no necesitan conocer el lenguaje de implementación.
 ## Verificación
 
 ```sh
-KERNEL_BUILD=/home/martin/Disco3/kernelLinux/build-nice-dual-gcd \
+KERNEL_BUILD=/home/martin/Disco3/kernelLinux/build-spasm-kernel-dual \
 	tools/spasm-kernel/project dual-test
 ```
 

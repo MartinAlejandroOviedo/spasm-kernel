@@ -1,6 +1,6 @@
 # Catálogo de migración Linux → SpASM
 
-Configuración: x86_64 defconfig + SpASM Kernel Kconfig
+Configuración: x86_64 defconfig + spasm-kernel Kconfig
 Kernel: 6.19.14
 Migración: símbolo `gcd` completada (Fase 1)
 
@@ -160,9 +160,9 @@ Sin estado global, aritméticas puras o con callback.
 
 ---
 
-## 11. Código excluido de SpASM Kernel
+## 11. Código excluido de spasm-kernel
 
-Funciones de subsistemas no incluidos en la configuración SpASM Kernel:
+Funciones de subsistemas no incluidos en la configuración spasm-kernel:
 
 - `CONFIG_*` no habilitadas
 - sistemas de archivos no usados

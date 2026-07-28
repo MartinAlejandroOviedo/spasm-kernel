@@ -1,4 +1,4 @@
-# SpASM Kernel — Frontera de Ensamblador Imprescindible
+# spasm-kernel — Frontera de Ensamblador Imprescindible
 
 Funciones en `.S` que **no pueden migrarse a SpASM** porque dependen de instrucciones privilegiadas, transiciones de modo de CPU, o convenciones de hardware que no tienen equivalente en un lenguaje de alto nivel.
 
