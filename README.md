@@ -1,10 +1,13 @@
 # SpASM Kernel
 
+![SpASM Kernel](img/spasm-kernel.png)
+
 Overlay para reemplazar funciones del kernel Linux 6.19.14 x86_64
 con implementaciones en SpASM.
 
 **Repo:** https://github.com/MartinAlejandroOviedo/spasm-kernel
 **Release:** https://github.com/MartinAlejandroOviedo/spasm-kernel/releases
+**Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
