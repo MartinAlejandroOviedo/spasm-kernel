@@ -14,9 +14,9 @@ con implementaciones en SpASM.
 ## Instalar desde release (recomendado)
 
 ```sh
-wget https://github.com/MartinAlejandroOviedo/spasm-kernel/releases/download/v0.1.0/linux-image-6.19.14-g83ce7f9bfbed-dirty_6.19.14-g83ce7f9bfbed-25_amd64.deb
-wget https://github.com/MartinAlejandroOviedo/spasm-kernel/releases/download/v0.1.0/linux-headers-6.19.14-g83ce7f9bfbed-dirty_6.19.14-g83ce7f9bfbed-25_amd64.deb
-sudo dpkg -i linux-image-*.deb linux-headers-*.deb
+wget https://github.com/MartinAlejandroOviedo/spasm-kernel/releases/download/v0.1.0/linux-image-6.19.14-spasm-kernel-*.deb
+wget https://github.com/MartinAlejandroOviedo/spasm-kernel/releases/download/v0.1.0/linux-headers-6.19.14-spasm-kernel-*.deb
+sudo dpkg -i linux-image-6.19.14-spasm-kernel-*.deb linux-headers-6.19.14-spasm-kernel-*.deb
 sudo reboot
 ```
 
