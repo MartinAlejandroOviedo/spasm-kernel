@@ -4,10 +4,31 @@ Overlay para reemplazar funciones del kernel Linux 6.19.14 x86_64
 con implementaciones en SpASM.
 
 **Repo:** https://github.com/MartinAlejandroOviedo/spasm-kernel
+**Release:** https://github.com/MartinAlejandroOviedo/spasm-kernel/releases
 
 ---
 
-## Aplicar sobre Linux 6.19.14 limpio
+## Instalar desde release (recomendado)
+
+```sh
+wget https://github.com/MartinAlejandroOviedo/spasm-kernel/releases/download/v0.1.0/linux-image-6.19.14-g83ce7f9bfbed-dirty_6.19.14-g83ce7f9bfbed-25_amd64.deb
+wget https://github.com/MartinAlejandroOviedo/spasm-kernel/releases/download/v0.1.0/linux-headers-6.19.14-g83ce7f9bfbed-dirty_6.19.14-g83ce7f9bfbed-25_amd64.deb
+sudo dpkg -i linux-image-*.deb linux-headers-*.deb
+sudo reboot
+```
+
+O con bzImage directo (sin .deb):
+
+```sh
+wget https://github.com/MartinAlejandroOviedo/spasm-kernel/releases/download/v0.1.0/bzImage-spasm-kernel
+sudo cp bzImage-spasm-kernel /boot/vmlinuz-spasm-kernel
+sudo update-grub
+sudo reboot
+```
+
+---
+
+## Compilar desde fuente (overlay sobre Linux 6.19.14)
 
 ```sh
 wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.19.14.tar.xz
