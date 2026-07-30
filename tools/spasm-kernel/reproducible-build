@@ -1,0 +1,85 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# spasm-kernel — Reproducible kernel build
+#
+# Produce bit-identical bzImage and modules from a clean checkout.
+#
+# Usage:
+#   tools/spasm-kernel/reproducible-build [build_dir]
+#
+# Required environment:
+#   SPASMC          path to spasmc.py compiler
+#   KERNEL_RELEASE  e.g. 6.19.14-spasm-kernel-desktop-amd64
+#
+# Output:
+#   build_dir/arch/x86/boot/bzImage
+#   build_dir/spasm-kernel.SHA256SUMS
+
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+build_dir=${1:-"$kernel_src/../build-spasm-kernel-reproducible"}
+config_ref="$kernel_src/../configs/spasm-kernel-desktop-amd64-full.config"
+spasmc=${SPASMC:?SPASMC no definido}
+kernel_release=${KERNEL_RELEASE:?KERNEL_RELEASE no definido}
+jobs=${JOBS:-$(nproc)}
+
+# Reproducibility anchors
+export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(date -d "2026-07-30 00:00:00 UTC" +%s 2>/dev/null || echo 1756073600)}
+export KBUILD_BUILD_TIMESTAMP=${KBUILD_BUILD_TIMESTAMP:-"$(date -u -d "@$SOURCE_DATE_EPOCH" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -u '+%Y-%m-%d %H:%M:%S')"}
+export KBUILD_BUILD_USER=${KBUILD_BUILD_USER:-spasm-kernel}
+export KBUILD_BUILD_HOST=${KBUILD_BUILD_HOST:-spasm-kernel}
+export PYTHONHASHSEED=0
+
+echo "=== spasm-kernel reproducible build ==="
+echo "source   : $kernel_src"
+echo "build    : $build_dir"
+echo "release  : $kernel_release"
+echo "spasmc   : $spasmc"
+echo "source_date_epoch : $SOURCE_DATE_EPOCH"
+echo "timestamp : $KBUILD_BUILD_TIMESTAMP"
+echo
+
+if [ ! -d "$build_dir" ]; then
+	echo "creating build directory..."
+	mkdir -p "$build_dir"
+fi
+
+if [ ! -f "$build_dir/.config" ]; then
+	if [ -f "$config_ref" ]; then
+		echo "copying reference config..."
+		cp "$config_ref" "$build_dir/.config"
+	else
+		echo "FATAL: no reference config at $config_ref"
+		exit 1
+	fi
+fi
+
+# Ensure care policy is enabled in config
+if ! grep -q "CONFIG_SPASM_KERNEL_CARE_POLICY=y" "$build_dir/.config" 2>/dev/null; then
+	echo "CONFIG_SPASM_KERNEL_CARE_POLICY=y" >> "$build_dir/.config"
+fi
+
+echo "building kernel (${jobs} jobs)..."
+export SPASMC="$spasmc"
+make -C "$kernel_src" O="$build_dir" KERNELRELEASE="$kernel_release" -j"$jobs" 2>&1 | tail -5
+
+echo
+echo "installing modules..."
+make -C "$kernel_src" O="$build_dir" KERNELRELEASE="$kernel_release" \
+	INSTALL_MOD_PATH="$build_dir/modules-install" -j"$jobs" modules_install 2>&1 | tail -5
+
+echo
+echo "generating checksums..."
+sha256sum "$build_dir/arch/x86/boot/bzImage" \
+	"$build_dir/vmlinux" \
+	"$build_dir/.config" \
+	> "$build_dir/spasm-kernel.SHA256SUMS"
+cat "$build_dir/spasm-kernel.SHA256SUMS"
+
+echo
+echo "=== done: $kernel_release ==="
+bz_size=$(stat -c '%s' "$build_dir/arch/x86/boot/bzImage" 2>/dev/null || echo 0)
+echo "bzImage: $((bz_size / 1024 / 1024)) MB"

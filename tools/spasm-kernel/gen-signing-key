@@ -1,0 +1,48 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# spasm-kernel — Generate persistent module signing key
+#
+# Generates an RSA 4096-bit key pair for kernel module signing.
+# The private key is stored in certs/signing_key.pem (keep secret).
+# The public key is embedded in the kernel for module verification.
+#
+# Usage:
+#   tools/spasm-kernel/gen-signing-key
+#
+# After generation, rebuild with the new key:
+#   make O=/path/build KERNELRELEASE=... -j$(nproc)
+
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+certs_dir="$kernel_src/certs"
+key_file="$certs_dir/signing_key.pem"
+x509_file="$certs_dir/signing_key.x509"
+
+if [ -f "$key_file" ]; then
+	echo "Key already exists: $key_file"
+	echo "Remove it first to regenerate: rm $key_file $x509_file"
+	exit 1
+fi
+
+mkdir -p "$certs_dir"
+
+echo "Generating RSA 4096-bit key (valid 3650 days)..."
+openssl req -new -nodes -utf8 -sha256 \
+	-days 3650 \
+	-batch -x509 \
+	-newkey rsa:4096 \
+	-keyout "$key_file" \
+	-out "$x509_file" \
+	-subj "/CN=spasm-kernel module signing key/"
+
+chmod 600 "$key_file"
+
+echo
+echo "Key generated:"
+echo "  private : $key_file"
+echo "  x509    : $x509_file"
+echo
+echo "The public key will be embedded in the kernel during the next build."
