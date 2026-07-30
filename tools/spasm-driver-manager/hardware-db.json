@@ -14,6 +14,10 @@
     "extra": {
       "package": "spasm-kernel-drivers-extra-{abi}",
       "description": "Hardware opcional o todavía no clasificado"
+    },
+    "legacy": {
+      "package": "spasm-kernel-drivers-legacy-{abi}",
+      "description": "Hardware histórico disponible sólo bajo pedido"
     }
   },
   "module_groups": {
@@ -43,8 +47,25 @@
     "rtw89_pci": "desktop",
     "snd_hda_intel": "desktop",
     "snd_usb_audio": "desktop",
-    "usbhid": "desktop",
-    "hid_generic": "desktop",
-    "btusb": "desktop"
+    "usbhid": "core",
+    "hid_generic": "core",
+    "btusb": "desktop",
+
+    "kvm_amd": "extra",
+    "vfio_pci": "extra",
+    "wireguard": "extra",
+    "thunderbolt": "extra",
+    "firewire_core": "extra",
+    "btrfs": "extra",
+    "xfs": "extra",
+    "f2fs": "extra",
+    "ntfs3": "extra",
+    "exfat": "extra",
+
+    "r8723bs": "legacy",
+    "com20020_pci": "legacy",
+    "eni": "legacy",
+    "comedi": "legacy",
+    "pata_pcmcia": "legacy"
   }
 }

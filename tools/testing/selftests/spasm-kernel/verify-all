@@ -12,7 +12,8 @@
 #   6. Equivalencia ampliada bin2bcd/int_pow/lcm
 #   7. Política Machine Care en SpASM (care-policy)
 #   8. Agente Machine Care global observacional (care-agent)
-#   9. Tamaño del kernel (size-report)
+#   9. Contrato de perfiles de drivers
+#  10. Tamaño del kernel (size-report)
 #
 # Uso:
 #   tools/testing/selftests/spasm-kernel/verify-all
@@ -166,8 +167,18 @@ else
     fail "machine_care_agent" "falló run_care_agent"
 fi
 
-# 9. Size report
-echo "--- 9. Tamaño del kernel ---"
+# 9. Driver profiles
+echo "--- 9. Perfiles de controladores ---"
+if KERNEL_BUILD="$kernel_build" \
+   "$kernel_src/tools/testing/selftests/spasm-kernel/run_driver_profiles" \
+   >/dev/null 2>&1; then
+    pass "driver_profiles"
+else
+    fail "driver_profiles" "falló run_driver_profiles"
+fi
+
+# 10. Size report
+echo "--- 10. Tamaño del kernel ---"
 if [ -f "$bzimage" ]; then
     bz_size=$(stat -c '%s' "$bzimage" 2>/dev/null || echo 0)
     vmlinux_size=$(stat -c '%s' "$kernel_build/vmlinux" 2>/dev/null || echo 0)

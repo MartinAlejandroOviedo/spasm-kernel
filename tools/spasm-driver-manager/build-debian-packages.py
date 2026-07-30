@@ -4,81 +4,26 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
-import os
 import shutil
 import subprocess
 import sys
 
 
-CORE_SEEDS = (
-    "nvme",
-    "ext4",
-    # Filesystems needed by a normal Debian installation and its boot flow.
-    "vfat",
-    "nls_cp437",
-    "nls_ascii",
-    "squashfs",
-    "loop",
-    "binfmt_misc",
-    "autofs4",
-    "configfs",
-    "ahci",
-    "ata_piix",
-    "sd_mod",
-    "usb_storage",
-    "uas",
-    "xhci_pci",
-    "usbhid",
-    "hid_generic",
-    "evdev",
-    "dm_mod",
-    "dm_crypt",
-)
+REPOSITORY = Path(__file__).resolve().parents[2]
+DEFAULT_GROUPS = REPOSITORY / "profiles/module-groups-v1.json"
 
-DESKTOP_SEEDS = (
-    "amdgpu",
-    "i915",
-    "nouveau",
-    "r8169",
-    "tun",
-    # VPNs and container/network tools use the nftables backend on Debian.
-    "nf_tables",
-    "nft_compat",
-    "nft_chain_nat",
-    "nft_masq",
-    "nft_ct",
-    "xt_mark",
-    "xt_connmark",
-    "xt_comment",
-    "xt_multiport",
-    "xt_tcpudp",
-    "xt_addrtype",
-    "xt_conntrack",
-    "xt_MASQUERADE",
-    "e1000e",
-    "igc",
-    "iwlwifi",
-    "ath9k",
-    "rtw88_pci",
-    "rtw89_pci",
-    "snd_hda_intel",
-    "snd_hda_codec_hdmi",
-    "snd_usb_audio",
-    "btusb",
-    "uvcvideo",
-    "uinput",
-    "mousedev",
-    "psmouse",
-    # Common desktop/system services request these during early userspace.
-    "lp",
-    "ppdev",
-    "parport_pc",
-    "i2c_dev",
-    "msr",
-    "snd_seq",
-    "snd_timer",
-)
+
+def load_module_groups(path: Path) -> dict[str, tuple[str, ...]]:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if document.get("schema") != "spasm-kernel-module-groups-v1":
+        raise RuntimeError(f"schema de grupos inválido: {path}")
+    groups = document.get("groups", {})
+    required = {"core", "desktop", "extra", "legacy"}
+    if set(groups) != required:
+        raise RuntimeError(f"grupos inválidos: {sorted(groups)}")
+    return {name: tuple(values) for name, values in groups.items()}
 
 
 def run(*command: str, capture: bool = False) -> str:
@@ -95,20 +40,31 @@ def run(*command: str, capture: bool = False) -> str:
     return result.stdout if capture else ""
 
 
-def resolve_modules(stage: Path, release: str, seeds: tuple[str, ...]) -> set[Path]:
+def resolve_modules(
+    stage: Path,
+    release: str,
+    seeds: tuple[str, ...],
+    *,
+    required: bool = True,
+) -> set[Path]:
     modules: set[Path] = set()
     modprobe = shutil.which("modprobe") or "/usr/sbin/modprobe"
     for seed in seeds:
-        output = run(
-            modprobe,
-            "-d",
-            str(stage),
-            "-S",
-            release,
-            "--show-depends",
-            seed,
-            capture=True,
-        )
+        try:
+            output = run(
+                modprobe,
+                "-d",
+                str(stage),
+                "-S",
+                release,
+                "--show-depends",
+                seed,
+                capture=True,
+            )
+        except RuntimeError:
+            if required:
+                raise
+            continue
         for line in output.splitlines():
             if not line.startswith("insmod "):
                 continue
@@ -211,6 +167,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--version", default="0.2.0-1")
     parser.add_argument("--abi", default="6.19.14-1")
+    parser.add_argument("--groups", type=Path, default=DEFAULT_GROUPS)
+    parser.add_argument(
+        "--expected-release",
+        default="6.19.14-spasm-kernel-desktop-amd64",
+        help="release exacto que deben contener kernel y módulos",
+    )
+    parser.add_argument(
+        "--include-legacy",
+        action="store_true",
+        help="crear paquete legacy si sus módulos existen en el staging",
+    )
     return parser.parse_args()
 
 
@@ -219,8 +186,9 @@ def main() -> int:
     build = args.build.resolve()
     stage = args.stage.resolve()
     output = args.output.resolve()
+    groups = load_module_groups(args.groups.resolve())
     release = (build / "include/config/kernel.release").read_text(encoding="utf-8").strip()
-    expected = "6.19.14-spasm-kernel-desktop-amd64"
+    expected = args.expected_release
     if release != expected:
         raise RuntimeError(f"release inesperada: {release!r}; se esperaba {expected!r}")
 
@@ -234,12 +202,27 @@ def main() -> int:
         shutil.rmtree(work)
     work.mkdir()
 
-    core_modules = resolve_modules(stage, release, CORE_SEEDS)
-    desktop_modules = resolve_modules(stage, release, DESKTOP_SEEDS) - core_modules
+    core_modules = resolve_modules(stage, release, groups["core"])
+    desktop_modules = resolve_modules(stage, release, groups["desktop"]) - core_modules
+    extra_modules = (
+        resolve_modules(stage, release, groups["extra"], required=False)
+        - core_modules
+        - desktop_modules
+    )
+    legacy_modules = set()
+    if args.include_legacy:
+        legacy_modules = (
+            resolve_modules(stage, release, groups["legacy"], required=False)
+            - core_modules
+            - desktop_modules
+            - extra_modules
+        )
 
     image_name = f"spasm-kernel-image-{release}"
     core_name = f"spasm-kernel-modules-core-{args.abi}"
     desktop_name = f"spasm-kernel-drivers-desktop-{args.abi}"
+    extra_name = f"spasm-kernel-drivers-extra-{args.abi}"
+    legacy_name = f"spasm-kernel-drivers-legacy-{args.abi}"
     care_name = "spasm-kernel-machine-care"
     image_dependency = f"{image_name} (= {args.version})"
 
@@ -324,6 +307,32 @@ update-grub || true
         f"depmod {release} || true\nupdate-initramfs -u -k {release} || true",
     )
 
+    extra = work / extra_name
+    write_control(
+        extra,
+        extra_name,
+        args.version,
+        "controladores y subsistemas opcionales contemporáneos para spasm-kernel",
+        depends=(image_dependency, f"{core_name} (= {args.version})"),
+    )
+    copy_module_set(stage, build, extra, extra_modules)
+    write_script(extra, "postinst", f"depmod {release}")
+    write_script(extra, "postrm", f"depmod {release} || true")
+
+    legacy = None
+    if legacy_modules:
+        legacy = work / legacy_name
+        write_control(
+            legacy,
+            legacy_name,
+            args.version,
+            "controladores históricos opt-in para spasm-kernel",
+            depends=(image_dependency, f"{core_name} (= {args.version})"),
+        )
+        copy_module_set(stage, build, legacy, legacy_modules)
+        write_script(legacy, "postinst", f"depmod {release}")
+        write_script(legacy, "postrm", f"depmod {release} || true")
+
     care = work / care_name
     write_control(
         care,
@@ -332,8 +341,7 @@ update-grub || true
         "protección observacional Machine Care para spasm-kernel",
         depends=("python3",),
     )
-    repository = Path(__file__).resolve().parents[2]
-    care_source = repository / "tools/spasm-care-agent"
+    care_source = REPOSITORY / "tools/spasm-care-agent"
     care_lib = care / "usr/lib/spasm-kernel"
     care_lib.mkdir(parents=True)
     shutil.copy2(care_source / "spasm-care-agent", care_lib / "spasm-care-agent")
@@ -377,15 +385,20 @@ fi
 """,
     )
 
-    artifacts = (
+    artifacts = [
         build_deb(image, output, image_name, args.version),
         build_deb(core, output, core_name, args.version),
         build_deb(desktop, output, desktop_name, args.version),
+        build_deb(extra, output, extra_name, args.version),
         build_deb(care, output, care_name, args.version),
-    )
+    ]
+    if legacy is not None:
+        artifacts.append(build_deb(legacy, output, legacy_name, args.version))
     print(f"release={release}")
     print(f"core_modules={len(core_modules)}")
     print(f"desktop_modules={len(desktop_modules)}")
+    print(f"extra_modules={len(extra_modules)}")
+    print(f"legacy_modules={len(legacy_modules)}")
     for artifact in artifacts:
         print(artifact)
     return 0

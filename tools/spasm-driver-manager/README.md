@@ -29,8 +29,8 @@ de instalación y la interfaz gráfica.
 `build-debian-packages.py` toma un build ya validado y un staging generado con
 `make modules_install`. Resuelve las dependencias de cada módulo mediante
 `modprobe` y produce los paquetes `image`, `modules-core` y
-`drivers-desktop` y `machine-care`. Esta es la primera implementación del
-modelo separado; no instala los paquetes resultantes.
+`drivers-desktop`, `drivers-extra`, `machine-care` y, cuando se solicita,
+`drivers-legacy`. No instala los paquetes resultantes.
 
 Los módulos se distribuyen como ELF `.ko` sin compresión. Primero se elimina su
 información de depuración y después se agrega la firma PKCS#7 con la clave del
@@ -49,6 +49,7 @@ y su servicio systemd. No modifica scheduler, frecuencias ni cgroups.
 - `core` siempre se recomienda porque contiene los módulos de arranque.
 - `desktop` agrupa gráficos, red, audio y periféricos habituales.
 - `extra` contiene dispositivos opcionales identificados mediante una regla.
+- `legacy` sólo se construye y recomienda de forma opt-in.
 - `unclassified` informa hardware todavía desconocido, pero no instala
   automáticamente `drivers-extra`.
 - La base `hardware-db.json` debe versionarse junto con la ABI.

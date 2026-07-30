@@ -120,6 +120,8 @@ La identidad pública de los paquetes también es `spasm-kernel`:
 - `spasm-kernel-image-<release>_<revisión>_amd64.deb`
 - `spasm-kernel-modules-core-<abi>_<revisión>_amd64.deb`
 - `spasm-kernel-drivers-desktop-<abi>_<revisión>_amd64.deb`
+- `spasm-kernel-drivers-extra-<abi>_<revisión>_amd64.deb`
+- `spasm-kernel-drivers-legacy-<abi>_<revisión>_amd64.deb` (opt-in)
 - `spasm-kernel-machine-care_<revisión>_amd64.deb`
 
 Los nombres compatibles con Linux que aparecen dentro del sistema de módulos

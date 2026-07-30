@@ -108,7 +108,7 @@ def package_summary(devices: list[dict[str, Any]], database: dict[str, Any]) -> 
     selected = {"core"}
     selected.update(device["group"] for device in devices if device["group"] in groups)
     summary = []
-    for group in ("core", "desktop", "extra"):
+    for group in ("core", "desktop", "extra", "legacy"):
         if group not in selected:
             continue
         definition = groups[group]

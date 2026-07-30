@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.4.0-alpha1 (2026-07-30)
+
+### Cambiado
+
+- Agregados los perfiles reproducibles `standard-amd64` y `legacy-amd64`.
+- Separados los módulos en contratos `core`, `desktop`, `extra` y `legacy`.
+- Incorporados el generador/auditor de `.config` y la verificación de grupos.
+- Reducido el perfil estándar inicial de 3.798 a 2.876 módulos configurados.
+- Agregado el paquete Debian `spasm-kernel-drivers-extra-<abi>` y soporte
+  opt-in para `spasm-kernel-drivers-legacy-<abi>`.
+
 ## v0.3.0-alpha1 (2026-07-29)
 
 ### Cambiado
