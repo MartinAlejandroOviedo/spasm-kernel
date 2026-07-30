@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""Detect hardware and recommend spasm-kernel driver package groups."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+from typing import Any
+
+
+TOOL_DIR = Path(__file__).resolve().parent
+DEFAULT_DATABASE = TOOL_DIR / "hardware-db.json"
+BUS_DIRS = ("pci", "usb", "platform", "acpi")
+
+
+def read_text(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except (FileNotFoundError, PermissionError, OSError):
+        return None
+
+
+def bound_driver(device: Path) -> str | None:
+    driver = device / "driver"
+    try:
+        return driver.resolve(strict=True).name
+    except (FileNotFoundError, OSError):
+        return None
+
+
+def resolve_modules(modalias: str, kernel_release: str | None) -> list[str]:
+    command = ["modprobe"]
+    if kernel_release:
+        command.extend(["--set-version", kernel_release])
+    command.extend(["--resolve-alias", modalias])
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return []
+    if result.returncode != 0:
+        return []
+    return sorted({line.strip().replace("-", "_") for line in result.stdout.splitlines() if line.strip()})
+
+
+def load_database(path: Path) -> dict[str, Any]:
+    with path.open(encoding="utf-8") as stream:
+        database = json.load(stream)
+    if database.get("schema") != 1:
+        raise ValueError(f"esquema de hardware no soportado: {database.get('schema')!r}")
+    return database
+
+
+def classify(modules: list[str], driver: str | None, database: dict[str, Any]) -> str:
+    module_groups = database["module_groups"]
+    candidates = list(modules)
+    if driver:
+        candidates.append(driver.replace("-", "_"))
+    groups = {module_groups[module] for module in candidates if module in module_groups}
+    if "core" in groups:
+        return "core"
+    if "desktop" in groups:
+        return "desktop"
+    return database["default_group"]
+
+
+def scan_devices(
+    sys_root: Path, database: dict[str, Any], kernel_release: str | None
+) -> list[dict[str, Any]]:
+    devices: list[dict[str, Any]] = []
+    for bus in BUS_DIRS:
+        bus_devices = sys_root / "bus" / bus / "devices"
+        if not bus_devices.is_dir():
+            continue
+        for device in sorted(bus_devices.iterdir(), key=lambda item: item.name):
+            modalias = read_text(device / "modalias")
+            if not modalias:
+                continue
+            driver = bound_driver(device)
+            modules = resolve_modules(modalias, kernel_release)
+            group = classify(modules, driver, database)
+            devices.append(
+                {
+                    "bus": bus,
+                    "device": device.name,
+                    "modalias": modalias,
+                    "driver": driver,
+                    "candidate_modules": modules,
+                    "group": group,
+                }
+            )
+    return devices
+
+
+def package_summary(devices: list[dict[str, Any]], database: dict[str, Any]) -> list[dict[str, Any]]:
+    groups = database["groups"]
+    abi = database["abi"]
+    selected = {"core"}
+    selected.update(device["group"] for device in devices if device["group"] in groups)
+    summary = []
+    for group in ("core", "desktop", "extra"):
+        if group not in selected:
+            continue
+        definition = groups[group]
+        summary.append(
+            {
+                "group": group,
+                "package": definition["package"].format(abi=abi),
+                "description": definition["description"],
+                "device_count": sum(device["group"] == group for device in devices),
+            }
+        )
+    return summary
+
+
+def print_text(devices: list[dict[str, Any]], packages: list[dict[str, Any]]) -> None:
+    print("Hardware detectado:")
+    for device in devices:
+        driver = device["driver"] or "sin enlazar"
+        candidates = ",".join(device["candidate_modules"]) or "sin coincidencia"
+        print(
+            f"- {device['bus']} {device['device']}: "
+            f"driver={driver} candidatos={candidates} grupo={device['group']}"
+        )
+    print("\nPaquetes recomendados:")
+    for package in packages:
+        print(f"- {package['package']}: {package['description']}")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Detecta hardware y recomienda paquetes de controladores de spasm-kernel."
+    )
+    parser.add_argument(
+        "--database", type=Path, default=DEFAULT_DATABASE, help="base hardware JSON"
+    )
+    parser.add_argument(
+        "--sys-root", type=Path, default=Path("/sys"), help="raíz sysfs (predeterminado: /sys)"
+    )
+    parser.add_argument(
+        "--kernel-release",
+        help="resolver módulos para esta versión mediante modprobe --set-version",
+    )
+    parser.add_argument("--json", action="store_true", help="emitir resultado JSON")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        database = load_database(args.database)
+        devices = scan_devices(args.sys_root, database, args.kernel_release)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"spasm-driver-detect: {error}", file=sys.stderr)
+        return 2
+
+    packages = package_summary(devices, database)
+    if args.json:
+        json.dump(
+            {
+                "schema": 1,
+                "kernel_release": args.kernel_release or os.uname().release,
+                "abi": database["abi"],
+                "devices": devices,
+                "recommended_packages": packages,
+            },
+            sys.stdout,
+            indent=2,
+            sort_keys=True,
+        )
+        print()
+    else:
+        print_text(devices, packages)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

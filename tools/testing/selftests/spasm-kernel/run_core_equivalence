@@ -1,0 +1,30 @@
+#!/bin/sh
+set -eu
+
+self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$self_dir/../../../.." && pwd)
+target="$kernel_src/tools/spasm-kernel/spasm-target-spasm-kernel-x86_64"
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT HUP INT TERM
+
+for source in \
+	"$kernel_src/lib/bin2bcd_spasm.spasm" \
+	"$kernel_src/lib/math/int_pow_spasm.spasm" \
+	"$kernel_src/lib/math/lcm_spasm.spasm"
+do
+	name=$(basename "$source" .spasm)
+	"$target" "$source" --out "$work/$name.S" >/dev/null
+	sed -i \
+		-e 's|#include <asm/nospec-branch.h>|#define ENDBR endbr64|' \
+		-e '/#define ENDBR endbr64/a #define RET ret' \
+		"$work/$name.S"
+done
+
+cc -O2 -Wall -Wextra -no-pie \
+	"$self_dir/core_equivalence.c" \
+	"$work/bin2bcd_spasm.S" \
+	"$work/int_pow_spasm.S" \
+	"$work/lcm_spasm.S" \
+	-o "$work/core-equivalence"
+
+"$work/core-equivalence"

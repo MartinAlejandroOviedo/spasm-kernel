@@ -1,0 +1,236 @@
+diff --git a/lib/Kconfig b/lib/Kconfig
+index 46d2cb8dc..cb7d353b1 100644
+--- a/lib/Kconfig
++++ b/lib/Kconfig
+@@ -9,7 +9,7 @@ config BINARY_PRINTF
+ menu "Library routines"
+ 
+ choice
+-	prompt "SpASM Kernel global migration mode"
++	prompt "spasm-kernel global migration mode"
+ 	default SPASM_KERNEL_MODE_SPASM
+ 	depends on X86_64
+ 
+@@ -37,7 +37,7 @@ endchoice
+ comment "Per-function overrides (when global mode is not sufficient)"
+ 
+ choice
+-	prompt "SpASM Kernel _bcd2bin implementation"
++	prompt "spasm-kernel BCD functions (_bcd2bin, _bin2bcd)"
+ 	default SPASM_KERNEL_BCD_SPASM if SPASM_KERNEL_MODE_SPASM
+ 	default SPASM_KERNEL_BCD_DUAL if SPASM_KERNEL_MODE_DUAL
+ 	default SPASM_KERNEL_BCD_C
+@@ -55,7 +55,7 @@ config SPASM_KERNEL_BCD_DUAL
+ endchoice
+ 
+ choice
+-	prompt "SpASM Kernel hex_to_bin implementation"
++	prompt "spasm-kernel hex_to_bin implementation"
+ 	default SPASM_KERNEL_HEX_TO_BIN_SPASM if SPASM_KERNEL_MODE_SPASM
+ 	default SPASM_KERNEL_HEX_TO_BIN_DUAL if SPASM_KERNEL_MODE_DUAL
+ 	default SPASM_KERNEL_HEX_TO_BIN_C
+diff --git a/lib/Makefile b/lib/Makefile
+index 3a443f11f..3abd62743 100644
+--- a/lib/Makefile
++++ b/lib/Makefile
+@@ -61,8 +61,8 @@ obj-y += string_helpers.o
+ obj-y += hexdump.o
+ 
+ obj-$(CONFIG_SPASM_KERNEL_BCD_C) += bcd.o
+-obj-$(CONFIG_SPASM_KERNEL_BCD_SPASM) += bcd.o bcd2bin_spasm.o bcd2bin_spasm_entry.o bcd2bin_export.o
+-obj-$(CONFIG_SPASM_KERNEL_BCD_DUAL) += bcd.o bcd2bin_spasm.o bcd2bin_dual.o
++obj-$(CONFIG_SPASM_KERNEL_BCD_SPASM) += bcd.o bcd2bin_spasm.o bcd2bin_spasm_entry.o bcd2bin_export.o bin2bcd_spasm.o bin2bcd_spasm_entry.o bin2bcd_export.o
++obj-$(CONFIG_SPASM_KERNEL_BCD_DUAL) += bcd.o bcd2bin_spasm.o bcd2bin_dual.o bin2bcd_spasm.o bin2bcd_dual.o
+ 
+ obj-$(CONFIG_SPASM_KERNEL_HEX_TO_BIN_SPASM) += hex_to_bin_spasm.o hex_to_bin_spasm_entry.o hex_to_bin_export.o
+ obj-$(CONFIG_TEST_HEXDUMP) += test_hexdump.o
+@@ -143,6 +143,7 @@ obj-$(CONFIG_TRACE_MMIO_ACCESS) += trace_readwrite.o
+ 
+ obj-$(CONFIG_GENERIC_HWEIGHT) += hweight.o
+ 
++
+ obj-$(CONFIG_BTREE) += btree.o
+ obj-$(CONFIG_INTERVAL_TREE) += interval_tree.o
+ obj-$(CONFIG_ASSOCIATIVE_ARRAY) += assoc_array.o
+diff --git a/lib/bcd.c b/lib/bcd.c
+index a6e4b7305..6aa84d4b7 100644
+--- a/lib/bcd.c
++++ b/lib/bcd.c
+@@ -19,10 +19,19 @@ unsigned _bcd2bin(unsigned char val)
+ EXPORT_SYMBOL(_bcd2bin);
+ #endif
+ 
++#ifdef CONFIG_SPASM_KERNEL_BCD_SPASM
++unsigned char __attribute__((weak)) _bin2bcd(unsigned val)
++#elif defined(CONFIG_SPASM_KERNEL_BCD_DUAL)
++#define _bin2bcd spasm_bin2bcd_c
++unsigned char _bin2bcd(unsigned val)
++#else
+ unsigned char _bin2bcd(unsigned val)
++#endif
+ {
+ 	const unsigned int t = (val * 103) >> 10;
+ 
+ 	return (t << 4) | (val - t * 10);
+ }
++#if !defined(CONFIG_SPASM_KERNEL_BCD_SPASM) && !defined(CONFIG_SPASM_KERNEL_BCD_DUAL)
+ EXPORT_SYMBOL(_bin2bcd);
++#endif
+diff --git a/lib/math/Kconfig b/lib/math/Kconfig
+index d2158653e..fa76f37cd 100644
+--- a/lib/math/Kconfig
++++ b/lib/math/Kconfig
+@@ -1,6 +1,6 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+ choice
+-	prompt "SpASM Kernel gcd implementation"
++	prompt "spasm-kernel gcd implementation"
+ 	default SPASM_KERNEL_GCD_SPASM if SPASM_KERNEL_MODE_SPASM
+ 	default SPASM_KERNEL_GCD_DUAL if SPASM_KERNEL_MODE_DUAL
+ 	default SPASM_KERNEL_GCD_C
+@@ -18,7 +18,7 @@ config SPASM_KERNEL_GCD_DUAL
+ endchoice
+ 
+ choice
+-	prompt "SpASM Kernel int_sqrt implementation"
++	prompt "spasm-kernel int_sqrt implementation"
+ 	default SPASM_KERNEL_INT_SQRT_SPASM if SPASM_KERNEL_MODE_SPASM
+ 	default SPASM_KERNEL_INT_SQRT_DUAL if SPASM_KERNEL_MODE_DUAL
+ 	default SPASM_KERNEL_INT_SQRT_C
+@@ -35,6 +35,42 @@ config SPASM_KERNEL_INT_SQRT_DUAL
+ 
+ endchoice
+ 
++choice
++	prompt "spasm-kernel int_pow implementation"
++	default SPASM_KERNEL_INT_POW_SPASM if SPASM_KERNEL_MODE_SPASM
++	default SPASM_KERNEL_INT_POW_DUAL if SPASM_KERNEL_MODE_DUAL
++	default SPASM_KERNEL_INT_POW_C
++	depends on X86_64
++
++config SPASM_KERNEL_INT_POW_C
++	bool "Original Linux C implementation"
++
++config SPASM_KERNEL_INT_POW_SPASM
++	bool "SpASM implementation"
++
++config SPASM_KERNEL_INT_POW_DUAL
++	bool "Dual C/SpASM comparison"
++
++endchoice
++
++choice
++	prompt "spasm-kernel lcm implementation"
++	default SPASM_KERNEL_LCM_SPASM if SPASM_KERNEL_MODE_SPASM
++	default SPASM_KERNEL_LCM_DUAL if SPASM_KERNEL_MODE_DUAL
++	default SPASM_KERNEL_LCM_C
++	depends on X86_64
++
++config SPASM_KERNEL_LCM_C
++	bool "Original Linux C implementation"
++
++config SPASM_KERNEL_LCM_SPASM
++	bool "SpASM implementation"
++
++config SPASM_KERNEL_LCM_DUAL
++	bool "Dual C/SpASM comparison"
++
++endchoice
++
+ config CORDIC
+ 	tristate "CORDIC algorithm"
+ 	help
+diff --git a/lib/math/Makefile b/lib/math/Makefile
+index 0f45b5b57..4fe2ca2ec 100644
+--- a/lib/math/Makefile
++++ b/lib/math/Makefile
+@@ -1,5 +1,9 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+-obj-y += div64.o lcm.o int_log.o int_pow.o reciprocal_div.o
++obj-y += div64.o int_log.o reciprocal_div.o
++
++obj-$(CONFIG_SPASM_KERNEL_INT_POW_C) += int_pow.o
++obj-$(CONFIG_SPASM_KERNEL_INT_POW_SPASM) += int_pow_spasm.o int_pow_spasm_entry.o int_pow_export.o
++obj-$(CONFIG_SPASM_KERNEL_INT_POW_DUAL) += int_pow.o int_pow_spasm.o int_pow_dual.o
+ 
+ obj-$(CONFIG_SPASM_KERNEL_GCD_C) += gcd.o
+ obj-$(CONFIG_SPASM_KERNEL_GCD_SPASM) += gcd_spasm.o gcd_spasm_entry.o gcd_export.o
+@@ -9,6 +13,10 @@ obj-$(CONFIG_SPASM_KERNEL_INT_SQRT_C) += int_sqrt.o
+ obj-$(CONFIG_SPASM_KERNEL_INT_SQRT_SPASM) += int_sqrt_spasm.o int_sqrt_spasm_entry.o int_sqrt_export.o
+ obj-$(CONFIG_SPASM_KERNEL_INT_SQRT_DUAL) += int_sqrt.o int_sqrt_spasm.o int_sqrt_dual.o
+ 
++obj-$(CONFIG_SPASM_KERNEL_LCM_SPASM) += lcm_spasm.o lcm_spasm_entry.o lcm_not_zero_spasm_entry.o lcm_export.o lcm_not_zero_export.o
++obj-$(CONFIG_SPASM_KERNEL_LCM_DUAL) += lcm.o lcm_spasm.o lcm_dual.o
++obj-$(CONFIG_SPASM_KERNEL_LCM_C) += lcm.o
++
+ obj-$(CONFIG_CORDIC)		+= cordic.o
+ obj-$(CONFIG_PRIME_NUMBERS)	+= prime_numbers.o
+ obj-$(CONFIG_RATIONAL)		+= rational.o
+diff --git a/lib/math/int_pow.c b/lib/math/int_pow.c
+index 0cf426e69..c2fef39c9 100644
+--- a/lib/math/int_pow.c
++++ b/lib/math/int_pow.c
+@@ -9,6 +9,12 @@
+ #include <linux/math.h>
+ #include <linux/types.h>
+ 
++#include "int_pow_spasm.h"
++
++#ifdef CONFIG_SPASM_KERNEL_INT_POW_DUAL
++#define int_pow spasm_int_pow_c
++#endif
++
+ /**
+  * int_pow - computes the exponentiation of the given base and exponent
+  * @base: base which will be raised to the given power
+@@ -29,4 +35,6 @@ u64 int_pow(u64 base, unsigned int exp)
+ 
+ 	return result;
+ }
++#ifndef CONFIG_SPASM_KERNEL_INT_POW_DUAL
+ EXPORT_SYMBOL_GPL(int_pow);
++#endif
+diff --git a/lib/math/lcm.c b/lib/math/lcm.c
+index 6e0b2e736..2a67f1392 100644
+--- a/lib/math/lcm.c
++++ b/lib/math/lcm.c
+@@ -4,17 +4,32 @@
+ #include <linux/export.h>
+ #include <linux/lcm.h>
+ 
++#include "lcm_spasm.h"
++
+ /* Lowest common multiple */
++#ifdef CONFIG_SPASM_KERNEL_LCM_SPASM
++unsigned long __attribute__((weak)) lcm(unsigned long a, unsigned long b)
++#elif defined(CONFIG_SPASM_KERNEL_LCM_DUAL)
++#define lcm spasm_lcm_c
++unsigned long lcm(unsigned long a, unsigned long b)
++#else
+ unsigned long lcm(unsigned long a, unsigned long b)
++#endif
+ {
+ 	if (a && b)
+ 		return (a / gcd(a, b)) * b;
+ 	else
+ 		return 0;
+ }
++#if !defined(CONFIG_SPASM_KERNEL_LCM_SPASM) && !defined(CONFIG_SPASM_KERNEL_LCM_DUAL)
+ EXPORT_SYMBOL_GPL(lcm);
++#endif
+ 
++#ifdef CONFIG_SPASM_KERNEL_LCM_SPASM
++unsigned long __attribute__((weak)) lcm_not_zero(unsigned long a, unsigned long b)
++#else
+ unsigned long lcm_not_zero(unsigned long a, unsigned long b)
++#endif
+ {
+ 	unsigned long l = lcm(a, b);
+ 
+@@ -23,4 +38,6 @@ unsigned long lcm_not_zero(unsigned long a, unsigned long b)
+ 
+ 	return (b ? : a);
+ }
++#if !defined(CONFIG_SPASM_KERNEL_LCM_SPASM)
+ EXPORT_SYMBOL_GPL(lcm_not_zero);
++#endif

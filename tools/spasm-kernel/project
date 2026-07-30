@@ -5,7 +5,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 kernel_src=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 project_parent=$(CDPATH= cd -- "$kernel_src/.." && pwd)
 
-kernel_build=${KERNEL_BUILD:-"$project_parent/build-x86_64-baseline"}
+kernel_build=${KERNEL_BUILD:-"$project_parent/build-spasm-kernel-baseline"}
 spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
 initramfs="$kernel_build/spasm-initramfs.cpio.gz"
 bzimage="$kernel_build/arch/x86/boot/bzImage"
@@ -69,7 +69,7 @@ build_kernel()
 
 build_initramfs()
 {
-	base_initramfs="$project_parent/build-x86_64-baseline/spasm-initramfs.cpio.gz"
+	base_initramfs="$project_parent/build-spasm-kernel-baseline/spasm-initramfs.cpio.gz"
 	if [ -f "$spasm_module" ]; then
 		SPASM_MODULE="$spasm_module" \
 			BASE_INITRAMFS="$base_initramfs" \

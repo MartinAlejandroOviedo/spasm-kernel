@@ -1,0 +1,23 @@
+[Unit]
+Description=SpASM Kernel Machine Care Agent
+Documentation=file:/usr/share/doc/spasm-kernel/machine-care-kernel-v1.md
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/spasm-kernel/spasm-care-agent --interval 5
+RuntimeDirectory=spasm-care
+RuntimeDirectoryMode=0755
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

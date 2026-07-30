@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "abi": "6.19.14-1",
+  "default_group": "unclassified",
+  "groups": {
+    "core": {
+      "package": "spasm-kernel-modules-core-{abi}",
+      "description": "Módulos necesarios para arrancar y acceder al sistema raíz"
+    },
+    "desktop": {
+      "package": "spasm-kernel-drivers-desktop-{abi}",
+      "description": "Gráficos, red, audio y periféricos habituales"
+    },
+    "extra": {
+      "package": "spasm-kernel-drivers-extra-{abi}",
+      "description": "Hardware opcional o todavía no clasificado"
+    }
+  },
+  "module_groups": {
+    "ahci": "core",
+    "ata_piix": "core",
+    "ext4": "core",
+    "nvme": "core",
+    "nvme_core": "core",
+    "sd_mod": "core",
+    "uas": "core",
+    "usb_storage": "core",
+    "xhci_hcd": "core",
+    "xhci_pci": "core",
+
+    "amdgpu": "desktop",
+    "i915": "desktop",
+    "nouveau": "desktop",
+    "radeon": "desktop",
+    "r8169": "desktop",
+    "e1000e": "desktop",
+    "igc": "desktop",
+    "iwlwifi": "desktop",
+    "ath9k": "desktop",
+    "ath10k_pci": "desktop",
+    "ath11k_pci": "desktop",
+    "rtw88_pci": "desktop",
+    "rtw89_pci": "desktop",
+    "snd_hda_intel": "desktop",
+    "snd_usb_audio": "desktop",
+    "usbhid": "desktop",
+    "hid_generic": "desktop",
+    "btusb": "desktop"
+  }
+}

@@ -1,6 +1,6 @@
 # Changelog
 
-## Sin publicar
+## v0.3.0-alpha1 (2026-07-29)
 
 ### Cambiado
 
@@ -10,6 +10,32 @@
 - Actualizados README, documentación, instaladores, mensajes y rutas de build.
 - Agregada la integración Debian que conserva la compatibilidad técnica con
   el ecosistema Linux sin exponer nombres genéricos en los paquetes.
+- Documentada la hoja de ruta para separar imagen, módulos esenciales y
+  controladores en paquetes Debian ligados a una ABI explícita.
+- Definidas las fases de escritorio, distribución amd64, SDK de terceros y
+  perfiles especializados, junto con sus criterios de salida.
+- Agregado `spasm-driver-detect`, prototipo de solo lectura que clasifica el
+  hardware y recomienda paquetes `core`, `desktop` o `extra`.
+- Definido un primer contrato JSON para la futura interfaz gráfica del
+  administrador de controladores.
+- Corregido el empaquetado temprano de módulos: `core` y `desktop` distribuyen
+  `.ko` sin compresión para que el `kmod` del initramfs pueda cargar NVMe antes
+  de montar la raíz.
+- Agregado el motor determinista `spasm_care_level_v1`, escrito en SpASM, como
+  núcleo común de decisión Machine Care para el futuro agente global.
+- Incorporados nueve vectores nativos que cubren los niveles GREEN, YELLOW,
+  ORANGE, RED y EMERGENCY, y su ejecución en `verify-all`.
+- Agregado el primer agente Machine Care global en modo observacional, con
+  política nativa SpASM, instantánea JSON atómica y aislamiento systemd.
+- Migradas y verificadas `_bin2bcd`, `int_pow`, `lcm` y `lcm_not_zero`, con
+  selección C/SpASM/dual y 200.100 comparaciones nativas sin discrepancias.
+- Corregida la integración Kbuild de `lcm` para impedir símbolos duplicados y
+  normalizada la extensión ABI de 32 a 64 bits en `int_pow`.
+- Corregida la firma de módulos Debian: ahora `strip` se ejecuta antes de
+  `sign-file`, evitando firmas PKCS#7 inválidas y errores `EINVAL`.
+- Agregado el paquete independiente `spasm-kernel-machine-care`.
+- Ampliada `verify-all` para comprobar las siete funciones públicas migradas,
+  la equivalencia ampliada y los dos componentes Machine Care.
 
 ## v0.1.0 (2026-07-27)
 

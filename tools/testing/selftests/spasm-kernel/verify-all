@@ -9,7 +9,10 @@
 #   3. Modo comparativo C/SpASM (dual-test)
 #   4. Arranque QEMU con SpASM activo (boot-test)
 #   5. Equivalencia de funciones migradas (equivalence-test)
-#   6. Tamaño del kernel (size-report)
+#   6. Equivalencia ampliada bin2bcd/int_pow/lcm
+#   7. Política Machine Care en SpASM (care-policy)
+#   8. Agente Machine Care global observacional (care-agent)
+#   9. Tamaño del kernel (size-report)
 #
 # Uso:
 #   tools/testing/selftests/spasm-kernel/verify-all
@@ -25,6 +28,7 @@ host_tools="$kernel_src/tools/spasm-kernel/host-tools"
 bzimage="$kernel_build/arch/x86/boot/bzImage"
 initramfs="$kernel_build/spasm-initramfs.cpio.gz"
 qemu_timeout=30
+qemu=${QEMU:-/usr/bin/qemu-system-x86_64}
 
 PASS=0
 FAIL=0
@@ -88,7 +92,7 @@ if [ ! -f "$initramfs" ]; then
     PATH="$host_tools:$PATH" KERNEL_BUILD="$kernel_build" \
         "$kernel_src/tools/spasm-kernel/project" initramfs >/dev/null 2>&1
 fi
-if timeout "$qemu_timeout" qemu-system-x86_64 \
+if timeout "$qemu_timeout" "$qemu" \
     -machine accel=tcg -cpu max -m 256M -smp 2 \
     -kernel "$bzimage" -initrd "$initramfs" \
     -append "console=ttyS0 quiet spasm.mode=test spasm.message=NK spasm.hostname=nk spasm.delay=0 spasm.debug=0" \
@@ -114,7 +118,7 @@ fi
 # 5. Symbol verification
 echo "--- 5. Símbolos en vmlinux ---"
 need_file "$kernel_build/vmlinux"
-for sym in gcd int_sqrt _bcd2bin hex_to_bin; do
+for sym in gcd int_sqrt _bcd2bin hex_to_bin int_pow lcm lcm_not_zero; do
     if nm "$kernel_build/vmlinux" 2>/dev/null | grep -q " T $sym$"; then
         :
     else
@@ -122,7 +126,8 @@ for sym in gcd int_sqrt _bcd2bin hex_to_bin; do
         continue
     fi
 done
-for entry in spasm_gcd spasm_int_sqrt spasm_bcd2bin spasm_hex_to_bin; do
+for entry in spasm_gcd spasm_int_sqrt spasm_bcd2bin spasm_hex_to_bin \
+             spasm_int_pow spasm_lcm spasm_lcm_not_zero; do
     if nm "$kernel_build/vmlinux" 2>/dev/null | grep -q " T $entry$"; then
         :
     else
@@ -132,8 +137,37 @@ for entry in spasm_gcd spasm_int_sqrt spasm_bcd2bin spasm_hex_to_bin; do
 done
 pass "symbols_present"
 
-# 6. Size report
-echo "--- 6. Tamaño del kernel ---"
+# 6. Expanded equivalence
+echo "--- 6. Equivalencia bin2bcd/int_pow/lcm ---"
+if "$kernel_src/tools/testing/selftests/spasm-kernel/run_core_equivalence" \
+   >/dev/null 2>&1; then
+    pass "core_equivalence"
+else
+    fail "core_equivalence" "falló run_core_equivalence"
+fi
+
+# 7. Machine Care policy
+echo "--- 7. Política Machine Care SpASM ---"
+if SPASMC="$spasmc" \
+   "$kernel_src/tools/testing/selftests/spasm-kernel/run_care_policy" \
+   >/dev/null 2>&1; then
+    pass "machine_care_policy"
+else
+    fail "machine_care_policy" "falló run_care_policy"
+fi
+
+# 8. Global observational Machine Care agent
+echo "--- 8. Agente Machine Care global ---"
+if SPASMC="$spasmc" \
+   "$kernel_src/tools/testing/selftests/spasm-kernel/run_care_agent" \
+   >/dev/null 2>&1; then
+    pass "machine_care_agent"
+else
+    fail "machine_care_agent" "falló run_care_agent"
+fi
+
+# 9. Size report
+echo "--- 9. Tamaño del kernel ---"
 if [ -f "$bzimage" ]; then
     bz_size=$(stat -c '%s' "$bzimage" 2>/dev/null || echo 0)
     vmlinux_size=$(stat -c '%s' "$kernel_build/vmlinux" 2>/dev/null || echo 0)

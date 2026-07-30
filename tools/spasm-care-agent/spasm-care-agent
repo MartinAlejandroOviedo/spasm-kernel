@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""Global observational Machine Care agent for spasm-kernel."""
+
+from __future__ import annotations
+
+import argparse
+import ctypes
+import json
+import os
+from pathlib import Path
+import signal
+import tempfile
+import time
+
+
+LEVEL_NAMES = ("GREEN", "YELLOW", "ORANGE", "RED", "EMERGENCY")
+RUNNING = True
+
+
+def stop_agent(_signum: int, _frame: object) -> None:
+    global RUNNING
+    RUNNING = False
+
+
+class CpuSampler:
+    def __init__(self, proc_stat: Path) -> None:
+        self.proc_stat = proc_stat
+        self.previous: tuple[int, int] | None = None
+
+    def sample(self) -> int:
+        fields = self.proc_stat.read_text(encoding="ascii").splitlines()[0].split()
+        values = [int(value) for value in fields[1:]]
+        idle = values[3] + (values[4] if len(values) > 4 else 0)
+        total = sum(values)
+        current = (total, idle)
+        if self.previous is None:
+            self.previous = current
+            return 0
+        total_delta = total - self.previous[0]
+        idle_delta = idle - self.previous[1]
+        self.previous = current
+        if total_delta <= 0:
+            return 0
+        return max(0, min(100, (100 * (total_delta - idle_delta)) // total_delta))
+
+
+def memory_free_mb(meminfo: Path) -> int:
+    for line in meminfo.read_text(encoding="ascii").splitlines():
+        if line.startswith("MemAvailable:"):
+            return int(line.split()[1]) // 1024
+    raise RuntimeError("MemAvailable no está presente en /proc/meminfo")
+
+
+def cpu_temperature_c(hwmon_root: Path, thermal_root: Path) -> tuple[int, str | None]:
+    preferred: list[tuple[int, str]] = []
+    fallback: list[tuple[int, str]] = []
+    for path in sorted(hwmon_root.glob("hwmon*/temp*_input")):
+        try:
+            value = int(path.read_text(encoding="ascii").strip()) // 1000
+        except (OSError, ValueError):
+            continue
+        if not 1 <= value <= 125:
+            continue
+        label_path = path.with_name(path.name.replace("_input", "_label"))
+        try:
+            label = label_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            label = ""
+        item = (value, str(path))
+        if any(token in label.lower() for token in ("tctl", "tdie", "package")):
+            preferred.append(item)
+        else:
+            fallback.append(item)
+    candidates = preferred or fallback
+    if not candidates:
+        for path in sorted(thermal_root.glob("thermal_zone*/temp")):
+            try:
+                value = int(path.read_text(encoding="ascii").strip()) // 1000
+            except (OSError, ValueError):
+                continue
+            if 1 <= value <= 125:
+                candidates.append((value, str(path)))
+    if not candidates:
+        return 0, None
+    return max(candidates, key=lambda item: item[0])
+
+
+class SpasmPolicy:
+    def __init__(self, library: Path) -> None:
+        self.library = library
+        self.native = ctypes.CDLL(str(library))
+        self.evaluate = self.native.spasm_care_level_v1
+        self.evaluate.argtypes = (ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong)
+        self.evaluate.restype = ctypes.c_ulong
+
+    def level(self, cpu_pct: int, cpu_temp_c: int, ram_free_mb: int) -> int:
+        value = int(self.evaluate(cpu_pct, cpu_temp_c, ram_free_mb))
+        if value not in range(len(LEVEL_NAMES)):
+            raise RuntimeError(f"nivel SpASM fuera de contrato: {value}")
+        return value
+
+
+def atomic_json(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", dir=path.parent, text=True
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, sort_keys=True, separators=(",", ":"))
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary_name, 0o644)
+        os.replace(temporary_name, path)
+    finally:
+        try:
+            os.unlink(temporary_name)
+        except FileNotFoundError:
+            pass
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="SpASM Machine Care global agent")
+    parser.add_argument("--once", action="store_true", help="publicar una sola muestra")
+    parser.add_argument("--interval", type=float, default=5.0)
+    parser.add_argument("--runtime-dir", type=Path, default=Path("/run/spasm-care"))
+    parser.add_argument(
+        "--policy-lib",
+        type=Path,
+        default=Path("/usr/lib/spasm-kernel/libspasm-care-policy.so"),
+    )
+    parser.add_argument("--proc-root", type=Path, default=Path("/proc"))
+    parser.add_argument("--sys-root", type=Path, default=Path("/sys"))
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    if args.interval < 0.2:
+        raise SystemExit("--interval debe ser >= 0.2 segundos")
+    policy = SpasmPolicy(args.policy_lib)
+    sampler = CpuSampler(args.proc_root / "stat")
+    signal.signal(signal.SIGTERM, stop_agent)
+    signal.signal(signal.SIGINT, stop_agent)
+    sequence = 0
+
+    while RUNNING:
+        cpu_pct = sampler.sample()
+        if sequence == 0:
+            time.sleep(min(args.interval, 0.25))
+            cpu_pct = sampler.sample()
+        ram_mb = memory_free_mb(args.proc_root / "meminfo")
+        temperature, temperature_source = cpu_temperature_c(
+            args.sys_root / "class/hwmon", args.sys_root / "class/thermal"
+        )
+        level = policy.level(cpu_pct, temperature, ram_mb)
+        sequence += 1
+        atomic_json(
+            args.runtime_dir / "status.json",
+            {
+                "schema": "spasm-care-status-v1",
+                "sequence": sequence,
+                "timestamp_unix": int(time.time()),
+                "kernel_release": os.uname().release,
+                "policy": "spasm_care_level_v1",
+                "policy_language": "SpASM",
+                "mode": "observe",
+                "level": level,
+                "level_name": LEVEL_NAMES[level],
+                "signals": {
+                    "cpu_pct": cpu_pct,
+                    "cpu_temp_c": temperature if temperature_source else None,
+                    "cpu_temp_source": temperature_source,
+                    "ram_free_mb": ram_mb,
+                },
+            },
+        )
+        if args.once:
+            break
+        time.sleep(args.interval)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

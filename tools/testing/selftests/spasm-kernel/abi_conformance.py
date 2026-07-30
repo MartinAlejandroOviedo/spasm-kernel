@@ -88,7 +88,14 @@ def check_builtin(build):
 
     relocations = run("readelf", "-rW", obj)
     relocation_symbols = set()
+    relocation_section = None
     for line in relocations.splitlines():
+        section_match = re.match(r"Relocation section '([^']+)'", line)
+        if section_match:
+            relocation_section = section_match.group(1)
+            continue
+        if relocation_section != ".rela.text":
+            continue
         if "R_X86_64_" not in line:
             continue
         fields = line.split()
