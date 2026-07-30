@@ -4,7 +4,7 @@ set -euo pipefail
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 kernel_src=$(CDPATH= cd -- "$script_dir/../.." && pwd)
 project_parent=$(CDPATH= cd -- "$kernel_src/.." && pwd)
-kernel_build=${KERNEL_BUILD:-"$project_parent/build-x86_64-baseline"}
+kernel_build=${KERNEL_BUILD:-"$project_parent/build-spasm-kernel-baseline"}
 log_file=${SPASM_QEMU_LOG:-"$kernel_build/spasm-kernel-0.0.1-poc-qemu.log"}
 
 mkdir -p "$kernel_build"
@@ -23,7 +23,7 @@ fi
 
 required_signals=(
 	"[spasm-init] SpASM_Kernel_Machine_and_User_Care"
-	"spasm: SpASM Kernel: SpASM nativo activo en Ring 0"
+	"spasm: spasm-kernel: SpASM nativo activo en Ring 0"
 	"spasm: Puntero tipado SpASM correcto"
 	"spasm: Memoria tipada SpASM comprobada"
 	"spasm: Indice dinamico SpASM comprobado"
@@ -45,5 +45,5 @@ for signal in "${required_signals[@]}"; do
 done
 
 echo
-echo "SpASM Kernel 0.0.1 PoC: VERIFICADO"
+echo "spasm-kernel 0.0.1 PoC: VERIFICADO"
 echo "Log: $log_file"

@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// spasm-kernel replacements for Linux lcm() and lcm_not_zero().
+
+extern fn gcd(a: usize, b: usize) -> usize;
+
+fn spasm_lcm_core(a: usize, b: usize) -> usize {
+	var tmp: usize = 0;
+	if (a != 0) {
+		if (b != 0) {
+			tmp = gcd(a, b);
+			tmp = a / tmp;
+			return tmp * b;
+		}
+	}
+	return 0;
+}
+
+export fn spasm_lcm(a: usize, b: usize) -> usize {
+	return spasm_lcm_core(a, b);
+}
+
+export fn spasm_lcm_not_zero(a: usize, b: usize) -> usize {
+	var l: usize = spasm_lcm_core(a, b);
+	if (l != 0) {
+		return l;
+	}
+	if (b != 0) {
+		return b;
+	}
+	return a;
+}

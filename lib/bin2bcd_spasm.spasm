@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// spasm-kernel replacement for Linux _bin2bcd().
+
+export fn spasm_bin2bcd(val: i32) -> i32 {
+	var t: i32 = val * 103;
+	t = t / 1024;
+	var resto: i32 = t * 10;
+	resto = val - resto;
+	var result: i32 = t * 16;
+	result = result + resto;
+	return result;
+}

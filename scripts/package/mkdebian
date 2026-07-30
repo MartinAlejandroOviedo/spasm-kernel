@@ -164,12 +164,12 @@ else
 	debian_revision=$("${srctree}/scripts/build-version")
 	packageversion=${upstream_version}-${debian_revision}
 fi
-sourcename=${KDEB_SOURCENAME:-linux-upstream}
+sourcename=${KDEB_SOURCENAME:-spasm-kernel}
 
 if [ "$ARCH" = "um" ] ; then
 	packagename=user-mode-linux
 else
-	packagename=linux-image
+	packagename=spasm-kernel-image
 fi
 
 debarch=
@@ -195,7 +195,7 @@ host_gnu=$(dpkg-architecture -a "${debarch}" -q DEB_HOST_GNU_TYPE | sed 's/_/-/g
 cat <<EOF > debian/changelog
 $sourcename ($packageversion) $distribution; urgency=low
 
-  * Custom built Linux kernel.
+  * Custom built spasm-kernel.
 
  -- $maintainer  $(date -R)
 EOF
@@ -213,36 +213,36 @@ Build-Depends-Arch: bc, bison, flex,
  kmod, libdw-dev:native, libelf-dev:native,
  libssl-dev:native, libssl-dev <!pkg.${sourcename}.nokernelheaders>,
  python3:native, rsync
-Homepage: https://www.kernel.org/
+Homepage: https://github.com/MartinAlejandroOviedo/spasm-kernel
 
 Package: $packagename-${KERNELRELEASE}
 Architecture: $debarch
-Description: Linux kernel, version ${KERNELRELEASE}
- This package contains the Linux kernel, modules and corresponding other
+Description: spasm-kernel image, version ${KERNELRELEASE}
+ This package contains the spasm-kernel image, modules and corresponding
  files, version: ${KERNELRELEASE}.
 EOF
 
 if [ "${SRCARCH}" != um ]; then
 cat <<EOF >> debian/control
 
-Package: linux-libc-dev
+Package: spasm-kernel-libc-dev
 Section: devel
 Provides: linux-kernel-headers
 Architecture: $debarch
-Description: Linux support headers for userspace development
- This package provides userspaces headers from the Linux kernel.  These headers
- are used by the installed headers for GNU glibc and other system libraries.
+Description: spasm-kernel support headers for userspace development
+ This package provides userspace headers from spasm-kernel. These headers are
+ used by the installed headers for GNU glibc and other system libraries.
 Multi-Arch: same
 EOF
 
 if is_enabled CONFIG_MODULES; then
 cat <<EOF >> debian/control
 
-Package: linux-headers-${KERNELRELEASE}
+Package: spasm-kernel-headers-${KERNELRELEASE}
 Architecture: $debarch
 Build-Profiles: <!pkg.${sourcename}.nokernelheaders>
-Description: Linux kernel headers for ${KERNELRELEASE} on $debarch
- This package provides kernel header files for ${KERNELRELEASE} on $debarch
+Description: spasm-kernel headers for ${KERNELRELEASE} on $debarch
+ This package provides spasm-kernel header files for ${KERNELRELEASE} on $debarch
  .
  This is useful for people who need to build external modules
 EOF
@@ -252,11 +252,11 @@ fi
 if is_enabled CONFIG_DEBUG_INFO; then
 cat <<EOF >> debian/control
 
-Package: linux-image-${KERNELRELEASE}-dbg
+Package: spasm-kernel-image-${KERNELRELEASE}-dbg
 Section: debug
 Architecture: $debarch
 Build-Profiles: <!pkg.${sourcename}.nokerneldbg>
-Description: Linux kernel debugging symbols for ${KERNELRELEASE}
+Description: spasm-kernel debugging symbols for ${KERNELRELEASE}
  This package will come in handy if you need to debug the kernel. It provides
  all the necessary debug symbols for the kernel and its modules.
 EOF

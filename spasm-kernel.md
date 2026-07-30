@@ -1,8 +1,8 @@
-# SpASM Kernel
+# spasm-kernel
 
 **Filosofía:** *Machine and User Care.*
 
-SpASM Kernel es el nombre de trabajo del proyecto. Su objetivo es construir un
+spasm-kernel es el nombre oficial del proyecto. Su objetivo es construir un
 sistema que cuide tanto la máquina —estabilidad, recursos, diagnóstico y
 comportamiento predecible— como a la persona —control, claridad, seguridad y
 una experiencia comprensible—.
@@ -70,7 +70,7 @@ una ruta alternativa que genere C.
 El directorio de construcción predeterminado es:
 
 ```text
-/home/martin/Disco3/kernelLinux/build-x86_64-baseline
+/home/martin/Disco3/kernelLinux/build-spasm-kernel-baseline
 ```
 
 Puede cambiarse sin editar archivos:
@@ -91,7 +91,7 @@ El comando `test` acepta estas variables:
 
 ```sh
 SPASM_MODE=test
-SPASM_MESSAGE=Nice_Kernel_Machine_and_User_Care
+SPASM_MESSAGE=spasm-kernel_Machine_and_User_Care
 SPASM_HOSTNAME=spasm-kernel
 SPASM_DELAY=0
 SPASM_DEBUG=0
@@ -119,7 +119,7 @@ mantener el arranque QEMU y la prueba del initramfs antes de integrarse.
   normalmente, aunque su implementación nativa provenga de SpASM.
 - **Migración verificable:** reemplazar componentes por módulos pequeños,
   reversibles y probados en x86_64.
-- **Identidad honesta:** distinguir el kernel Linux de base, SpASM Kernel como
+- **Identidad honesta:** distinguir el kernel Linux de base, spasm-kernel como
   proyecto y SpASM como lenguaje y compilador.
 
 El primer backend nativo admite el subconjunto de módulos con metadatos,
@@ -277,7 +277,7 @@ tools/testing/selftests/spasm-kernel/run_kbuild_spasm
 El contrato completo de esta integración está en
 `docs/spasm-kernel/spasm-kbuild-v1.md`.
 
-El build host necesita normalmente `bc`. Para entornos mínimos, SpASM Kernel
+El build host necesita normalmente `bc`. Para entornos mínimos, spasm-kernel
 incluye un reemplazo limitado exclusivamente a `kernel/time/timeconst.bc` en
 `tools/spasm-kernel/host-tools`; no pretende ser una implementación general de
 `bc`.
@@ -295,7 +295,7 @@ registros, alineación de pila, visibilidad de símbolos, secciones ELF, IBT,
 rethunk, objtool, ORC y relocaciones autorizadas. Su verificación ejecutable es:
 
 ```sh
-KERNEL_BUILD=/home/martin/Disco3/kernelLinux/build-nice-spasm-gcd \
+KERNEL_BUILD=/home/martin/Disco3/kernelLinux/build-spasm-kernel \
 	tools/spasm-kernel/project abi-test
 ```
 

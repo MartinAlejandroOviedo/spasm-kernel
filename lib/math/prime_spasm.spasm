@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// spasm-kernel replacement for Linux slow_is_prime_number().
+
+fn spasm_prime_sqrt(x: usize) -> usize {
+	var y: usize = 1;
+	while (y * y <= x) {
+		y = y + 1;
+	}
+	return y - 1;
+}
+
+export fn spasm_slow_is_prime_number(x: usize) -> usize {
+	var y: usize = spasm_prime_sqrt(x);
+	var found: usize = 0;
+	var tmp: usize = 0;
+	while (y > 1) {
+		tmp = x % y;
+		if (tmp == 0) {
+			found = 1;
+		}
+		y = y - 1;
+	}
+	if (found == 0) {
+		return 1;
+	}
+	return 0;
+}

@@ -54,8 +54,8 @@ if [ -f "$kernel_build/vmlinux" ]; then
 		die "vmlinux no exporta gcd"
 	echo "ok - dual_vmlinux_contract"
 	echo "1..4"
-	echo "# SpASM Kernel gcd dual: CONFORME"
+	echo "# spasm-kernel gcd dual: CONFORME"
 else
 	echo "1..3"
-	echo "# SpASM Kernel gcd dual: objetos conformes; vmlinux aun no construido"
+	echo "# spasm-kernel gcd dual: objetos conformes; vmlinux aun no construido"
 fi

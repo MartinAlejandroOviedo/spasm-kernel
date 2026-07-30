@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""Validate module package groups and the hardware classification database."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+REPOSITORY = Path(__file__).resolve().parents[2]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--groups",
+        type=Path,
+        default=REPOSITORY / "profiles/module-groups-v1.json",
+    )
+    parser.add_argument(
+        "--hardware-db",
+        type=Path,
+        default=REPOSITORY / "tools/spasm-driver-manager/hardware-db.json",
+    )
+    args = parser.parse_args()
+
+    manifest = json.loads(args.groups.read_text(encoding="utf-8"))
+    database = json.loads(args.hardware_db.read_text(encoding="utf-8"))
+    groups = manifest["groups"]
+    failures: list[str] = []
+    owners: dict[str, str] = {}
+    for group, seeds in groups.items():
+        for seed in seeds:
+            previous = owners.setdefault(seed, group)
+            if previous != group:
+                failures.append(f"{seed}: duplicado en {previous} y {group}")
+
+    db_groups = set(database["groups"])
+    if set(groups) != db_groups:
+        failures.append(
+            f"grupos distintos manifest={sorted(groups)} db={sorted(db_groups)}"
+        )
+    for module, group in database["module_groups"].items():
+        if group not in groups:
+            failures.append(f"{module}: grupo desconocido {group}")
+
+    critical = {
+        "nvme": "core",
+        "ext4": "core",
+        "ahci": "core",
+        "xhci_pci": "core",
+        "usbhid": "core",
+        "amdgpu": "desktop",
+        "r8169": "desktop",
+        "snd_hda_intel": "desktop",
+        "snd_usb_audio": "desktop",
+    }
+    for module, expected in critical.items():
+        actual = owners.get(module)
+        if actual != expected:
+            failures.append(f"{module}: esperado={expected} actual={actual}")
+        classified = database["module_groups"].get(module)
+        if classified is not None and classified != expected:
+            failures.append(
+                f"{module}: manifest={expected} hardware-db={classified}"
+            )
+
+    if failures:
+        for failure in failures:
+            print(f"not ok - {failure}")
+        return 1
+    print(
+        "module groups: OK "
+        + " ".join(f"{name}={len(values)}" for name, values in groups.items())
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal timeconst.bc runner for Nice Kernel build hosts without bc."""
+"""Minimal timeconst.bc runner for spasm-kernel build hosts without bc."""
 
 import math
 from pathlib import Path
@@ -90,12 +90,12 @@ def generate(hz):
 def main():
     scripts = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
     if len(scripts) != 1 or Path(scripts[0]).name != "timeconst.bc":
-        print("nice-kernel bc: solamente se admite kernel/time/timeconst.bc", file=sys.stderr)
+        print("spasm-kernel bc: solamente se admite kernel/time/timeconst.bc", file=sys.stderr)
         return 2
     try:
         hz = int(sys.stdin.read().strip())
     except ValueError:
-        print("nice-kernel bc: HZ invalido", file=sys.stderr)
+        print("spasm-kernel bc: HZ invalido", file=sys.stderr)
         return 2
     sys.stdout.write(generate(hz))
     return 0

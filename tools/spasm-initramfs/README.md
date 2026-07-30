@@ -1,7 +1,7 @@
-# Initramfs de desarrollo de SpASM Kernel
+# Initramfs de desarrollo de spasm-kernel
 
 Este initramfs proporciona una consola mínima y una prueba automática para el
-kernel x86_64 del proyecto SpASM Kernel, basado en la filosofía *Machine and
+kernel x86_64 del proyecto spasm-kernel, basado en la filosofía *Machine and
 User Care*. Su comportamiento se configura desde la línea de comandos del
 kernel, sin reconstruir el archivo. El prefijo técnico `spasm.*` se conserva
 porque identifica la interfaz de la cadena de herramientas SpASM.
@@ -33,7 +33,7 @@ También se puede indicar otra ruta como primer argumento. La variable
 ```sh
 qemu-system-x86_64 \
   -m 512M -smp 2 \
-  -kernel ../build-x86_64-baseline/arch/x86/boot/bzImage \
+  -kernel ../build-spasm-kernel-baseline/arch/x86/boot/bzImage \
   -initrd tools/spasm-initramfs/spasm-initramfs.cpio.gz \
   -append "console=ttyS0 spasm.mode=test spasm.message=Prueba_base spasm.debug=1" \
   -nographic -no-reboot

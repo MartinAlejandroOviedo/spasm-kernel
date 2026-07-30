@@ -61,8 +61,8 @@ obj-y += string_helpers.o
 obj-y += hexdump.o
 
 obj-$(CONFIG_SPASM_KERNEL_BCD_C) += bcd.o
-obj-$(CONFIG_SPASM_KERNEL_BCD_SPASM) += bcd.o bcd2bin_spasm.o bcd2bin_spasm_entry.o bcd2bin_export.o
-obj-$(CONFIG_SPASM_KERNEL_BCD_DUAL) += bcd.o bcd2bin_spasm.o bcd2bin_dual.o
+obj-$(CONFIG_SPASM_KERNEL_BCD_SPASM) += bcd.o bcd2bin_spasm.o bcd2bin_spasm_entry.o bcd2bin_export.o bin2bcd_spasm.o bin2bcd_spasm_entry.o bin2bcd_export.o
+obj-$(CONFIG_SPASM_KERNEL_BCD_DUAL) += bcd.o bcd2bin_spasm.o bcd2bin_dual.o bin2bcd_spasm.o bin2bcd_dual.o
 
 obj-$(CONFIG_SPASM_KERNEL_HEX_TO_BIN_SPASM) += hex_to_bin_spasm.o hex_to_bin_spasm_entry.o hex_to_bin_export.o
 obj-$(CONFIG_TEST_HEXDUMP) += test_hexdump.o
@@ -142,6 +142,7 @@ lib-$(CONFIG_INDIRECT_IOMEM) += logic_iomem.o
 obj-$(CONFIG_TRACE_MMIO_ACCESS) += trace_readwrite.o
 
 obj-$(CONFIG_GENERIC_HWEIGHT) += hweight.o
+
 
 obj-$(CONFIG_BTREE) += btree.o
 obj-$(CONFIG_INTERVAL_TREE) += interval_tree.o

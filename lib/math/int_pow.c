@@ -9,6 +9,12 @@
 #include <linux/math.h>
 #include <linux/types.h>
 
+#include "int_pow_spasm.h"
+
+#ifdef CONFIG_SPASM_KERNEL_INT_POW_DUAL
+#define int_pow spasm_int_pow_c
+#endif
+
 /**
  * int_pow - computes the exponentiation of the given base and exponent
  * @base: base which will be raised to the given power
@@ -29,4 +35,6 @@ u64 int_pow(u64 base, unsigned int exp)
 
 	return result;
 }
+#ifndef CONFIG_SPASM_KERNEL_INT_POW_DUAL
 EXPORT_SYMBOL_GPL(int_pow);
+#endif

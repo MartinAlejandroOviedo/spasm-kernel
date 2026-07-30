@@ -1,11 +1,11 @@
-# SpASM Kernel 0.0.1 PoC
+# spasm-kernel 0.0.1 PoC
 
 Este documento congela la primera prueba reproducible de ejecución de código
 SpASM nativo en Ring 0.
 
 ## Identidad
 
-- Proyecto: SpASM Kernel
+- Proyecto: spasm-kernel
 - Filosofía: Machine and User Care
 - Arquitectura: x86_64
 - Base: Linux 6.19.14
@@ -31,7 +31,7 @@ tools/spasm-kernel/verify-poc
 Directorio de construcción utilizado:
 
 ```text
-/home/martin/Disco3/kernelLinux/build-x86_64-baseline
+/home/martin/Disco3/kernelLinux/build-spasm-kernel-baseline
 ```
 
 ## Herramientas de la prueba
@@ -84,8 +84,8 @@ alterar el comportamiento comprobado.
 La prueba solamente se considera aprobada si QEMU muestra todas estas señales:
 
 ```text
-[spasm-init] Nice_Kernel_Machine_and_User_Care
-spasm: SpASM Kernel: SpASM nativo activo en Ring 0
+[spasm-init] spasm-kernel_Machine_and_User_Care
+spasm: spasm-kernel: SpASM nativo activo en Ring 0
 spasm: Condicional SpASM nativo correcto
 spasm: Bucle SpASM nativo correcto
 spasm: Division y modulo SpASM correctos

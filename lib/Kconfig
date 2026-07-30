@@ -9,7 +9,7 @@ config BINARY_PRINTF
 menu "Library routines"
 
 choice
-	prompt "SpASM Kernel global migration mode"
+	prompt "spasm-kernel global migration mode"
 	default SPASM_KERNEL_MODE_SPASM
 	depends on X86_64
 
@@ -37,7 +37,7 @@ endchoice
 comment "Per-function overrides (when global mode is not sufficient)"
 
 choice
-	prompt "SpASM Kernel _bcd2bin implementation"
+	prompt "spasm-kernel BCD functions (_bcd2bin, _bin2bcd)"
 	default SPASM_KERNEL_BCD_SPASM if SPASM_KERNEL_MODE_SPASM
 	default SPASM_KERNEL_BCD_DUAL if SPASM_KERNEL_MODE_DUAL
 	default SPASM_KERNEL_BCD_C
@@ -55,7 +55,7 @@ config SPASM_KERNEL_BCD_DUAL
 endchoice
 
 choice
-	prompt "SpASM Kernel hex_to_bin implementation"
+	prompt "spasm-kernel hex_to_bin implementation"
 	default SPASM_KERNEL_HEX_TO_BIN_SPASM if SPASM_KERNEL_MODE_SPASM
 	default SPASM_KERNEL_HEX_TO_BIN_DUAL if SPASM_KERNEL_MODE_DUAL
 	default SPASM_KERNEL_HEX_TO_BIN_C

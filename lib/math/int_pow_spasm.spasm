@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// spasm-kernel replacement for Linux int_pow().
+
+export fn spasm_int_pow(base: u64, exp: u64) -> u64 {
+	var result: u64 = 1;
+	var tmp: u64 = 0;
+	while (exp != 0) {
+		tmp = exp % 2;
+		if (tmp != 0) {
+			result = result * base;
+		}
+		exp = exp / 2;
+		base = base * base;
+	}
+	return result;
+}

@@ -1,27 +1,27 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
-# SpASM Kernel — Install script
+# spasm-kernel — Install script
 set -eu
 
 ARCH=$(uname -m)
 if [ "$ARCH" != "x86_64" ]; then
-    echo "SpASM Kernel solo soporta x86_64. Arquitectura detectada: $ARCH"
+    echo "spasm-kernel solo soporta x86_64. Arquitectura detectada: $ARCH"
     exit 1
 fi
 
 RELEASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-KVER="6.19.14-spasm"
+KVER="6.19.14-spasm-kernel"
 
-echo "=== SpASM Kernel v0.1.0 — Instalación ==="
+echo "=== spasm-kernel v0.1.0 — Instalación ==="
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Ejecutar como root: sudo $0"
     exit 1
 fi
 
-if [ -f "$RELEASE_DIR/linux-image-"*".deb" ]; then
+if [ -f "$RELEASE_DIR/spasm-kernel-image-"*".deb" ]; then
     echo "Instalando paquetes .deb..."
-    dpkg -i "$RELEASE_DIR"/linux-image-*.deb "$RELEASE_DIR"/linux-headers-*.deb
+    dpkg -i "$RELEASE_DIR"/spasm-kernel-image-*.deb "$RELEASE_DIR"/spasm-kernel-headers-*.deb
 else
     echo "Instalando bzImage directo..."
     cp "$RELEASE_DIR/bzImage-spasm-kernel" "/boot/vmlinuz-$KVER"
@@ -33,7 +33,7 @@ update-grub || grub-mkconfig -o /boot/grub/grub.cfg
 
 echo ""
 echo "=== Instalación completa ==="
-echo "Reinicia y selecciona 'SpASM Kernel' en el menú de GRUB."
+echo "Reinicia y selecciona 'spasm-kernel' en el menú de GRUB."
 echo ""
 echo "Para verificar después de reiniciar:"
 echo "  uname -r"
