@@ -118,7 +118,7 @@ fi
 # 5. Symbol verification
 echo "--- 5. Símbolos en vmlinux ---"
 need_file "$kernel_build/vmlinux"
-for sym in gcd int_sqrt _bcd2bin hex_to_bin int_pow lcm lcm_not_zero; do
+for sym in gcd int_sqrt _bcd2bin _bin2bcd hex_to_bin int_pow lcm lcm_not_zero; do
     if nm "$kernel_build/vmlinux" 2>/dev/null | grep -q " T $sym$"; then
         :
     else
@@ -126,7 +126,7 @@ for sym in gcd int_sqrt _bcd2bin hex_to_bin int_pow lcm lcm_not_zero; do
         continue
     fi
 done
-for entry in spasm_gcd spasm_int_sqrt spasm_bcd2bin spasm_hex_to_bin \
+for entry in spasm_gcd spasm_int_sqrt spasm_bcd2bin spasm_bin2bcd spasm_hex_to_bin \
              spasm_int_pow spasm_lcm spasm_lcm_not_zero; do
     if nm "$kernel_build/vmlinux" 2>/dev/null | grep -q " T $entry$"; then
         :

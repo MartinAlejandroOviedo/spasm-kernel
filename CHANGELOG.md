@@ -34,7 +34,7 @@
 - Corregida la firma de módulos Debian: ahora `strip` se ejecuta antes de
   `sign-file`, evitando firmas PKCS#7 inválidas y errores `EINVAL`.
 - Agregado el paquete independiente `spasm-kernel-machine-care`.
-- Ampliada `verify-all` para comprobar las siete funciones públicas migradas,
+- Ampliada `verify-all` para comprobar las ocho funciones públicas migradas,
   la equivalencia ampliada y los dos componentes Machine Care.
 
 ## v0.1.0 (2026-07-27)
