@@ -72,6 +72,17 @@ config SPASM_KERNEL_HEX_TO_BIN_DUAL
 
 endchoice
 
+config SPASM_KERNEL_CARE_POLICY
+	bool "spasm-kernel Machine Care policy"
+	depends on SPASM_KERNEL_GLOBAL_MIGRATION
+	default y if SPASM_KERNEL_MODE_SPASM
+	default y if SPASM_KERNEL_MODE_DUAL
+	help
+	  Compile the Machine Care policy engine written in SpASM.
+	  This provides spasm_care_level_v1() which maps CPU usage,
+	  temperature, and free RAM to a system care level
+	  (GREEN, YELLOW, ORANGE, RED, EMERGENCY).
+
 config RAID6_PQ
 	tristate
 
