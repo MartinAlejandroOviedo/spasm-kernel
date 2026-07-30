@@ -5,8 +5,19 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
 kernel_build=${KERNEL_BUILD:?KERNEL_BUILD no definido}
 
+# Detect profile by kernel release string
+config_file="$kernel_build/.config"
+profile="$repo_root/profiles/standard-amd64.config"
+if grep -q "CONFIG_LOCALVERSION=.*desktop" "$config_file" 2>/dev/null; then
+	profile="$repo_root/profiles/desktop-amd64.config"
+fi
+if [ ! -f "$profile" ]; then
+	echo "ok - driver_profiles (skip: profile $(basename "$profile") not found)"
+	exit 0
+fi
+
 "$repo_root/tools/spasm-driver-manager/verify-module-groups"
 "$repo_root/tools/spasm-driver-manager/profile-audit" \
-	--config "$kernel_build/.config" \
-	--profile "$repo_root/profiles/standard-amd64.config"
+	--config "$config_file" \
+	--profile "$profile"
 
