@@ -48,7 +48,14 @@ static const unsigned short logtable[256] = {
 	0xfa2f, 0xfaea, 0xfba5, 0xfc60, 0xfd1a, 0xfdd4, 0xfe8e, 0xff47,
 };
 
+#ifdef CONFIG_SPASM_KERNEL_INTLOG2_SPASM
+unsigned int __attribute__((weak)) intlog2(u32 value)
+#elif defined(CONFIG_SPASM_KERNEL_INTLOG2_DUAL)
+#define intlog2 spasm_intlog2_c
 unsigned int intlog2(u32 value)
+#else
+unsigned int intlog2(u32 value)
+#endif
 {
 	/**
 	 *	returns: log2(value) * 2^24
@@ -106,9 +113,18 @@ unsigned int intlog2(u32 value)
 	/* now we return the result */
 	return ((msb << 24) + (logtable[logentry] << 8) + interpolation);
 }
+#if !defined(CONFIG_SPASM_KERNEL_INTLOG2_SPASM) && !defined(CONFIG_SPASM_KERNEL_INTLOG2_DUAL)
 EXPORT_SYMBOL(intlog2);
+#endif
 
+#ifdef CONFIG_SPASM_KERNEL_INTLOG10_SPASM
+unsigned int __attribute__((weak)) intlog10(u32 value)
+#elif defined(CONFIG_SPASM_KERNEL_INTLOG10_DUAL)
+#define intlog10 spasm_intlog10_c
 unsigned int intlog10(u32 value)
+#else
+unsigned int intlog10(u32 value)
+#endif
 {
 	/**
 	 *	returns: log10(value) * 2^24
@@ -130,4 +146,6 @@ unsigned int intlog10(u32 value)
 
 	return (log * 646456993) >> 31;
 }
+#if !defined(CONFIG_SPASM_KERNEL_INTLOG10_SPASM) && !defined(CONFIG_SPASM_KERNEL_INTLOG10_DUAL)
 EXPORT_SYMBOL(intlog10);
+#endif

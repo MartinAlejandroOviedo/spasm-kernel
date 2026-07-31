@@ -25,3 +25,7 @@ obj-$(CONFIG_TEST_DIV64)	+= test_div64.o
 obj-$(CONFIG_TEST_MULDIV64)	+= test_mul_u64_u64_div_u64.o
 
 obj-y += tests/
+obj-$(CONFIG_SPASM_KERNEL_INTLOG2_SPASM) += intlog2_spasm.o intlog2_spasm_entry.o intlog2_export.o
+obj-$(CONFIG_SPASM_KERNEL_INTLOG2_DUAL) += intlog2_spasm.o intlog2_dual.o
+obj-$(CONFIG_SPASM_KERNEL_INTLOG10_SPASM) += intlog10_spasm.o intlog10_spasm_entry.o intlog10_export.o
+obj-$(CONFIG_SPASM_KERNEL_INTLOG10_DUAL) += intlog10_spasm.o intlog10_dual.o
