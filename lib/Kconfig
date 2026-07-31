@@ -975,3 +975,21 @@ config SPASM_KERNEL_BITMAP_INTERSECTS_DUAL
 	bool "Dual C/SpASM comparison"
 
 endchoice
+
+choice
+	prompt "spasm-kernel bin2hex implementation"
+	default SPASM_KERNEL_BIN2HEX_SPASM if SPASM_KERNEL_MODE_SPASM
+	default SPASM_KERNEL_BIN2HEX_DUAL if SPASM_KERNEL_MODE_DUAL
+	default SPASM_KERNEL_BIN2HEX_C
+	depends on X86_64
+
+config SPASM_KERNEL_BIN2HEX_C
+	bool "Original Linux C implementation"
+
+config SPASM_KERNEL_BIN2HEX_SPASM
+	bool "SpASM implementation"
+
+config SPASM_KERNEL_BIN2HEX_DUAL
+	bool "Dual C/SpASM comparison"
+
+endchoice

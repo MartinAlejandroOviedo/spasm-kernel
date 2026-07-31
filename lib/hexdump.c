@@ -99,7 +99,14 @@ EXPORT_SYMBOL(hex2bin);
  * @src: binary data
  * @count: binary data length
  */
+#ifdef CONFIG_SPASM_KERNEL_BIN2HEX_SPASM
+char __attribute__((weak)) *bin2hex(char *dst, const void *src, size_t count)
+#elif defined(CONFIG_SPASM_KERNEL_BIN2HEX_DUAL)
+#define bin2hex spasm_bin2hex_c
 char *bin2hex(char *dst, const void *src, size_t count)
+#else
+char *bin2hex(char *dst, const void *src, size_t count)
+#endif
 {
 	const unsigned char *_src = src;
 
@@ -107,7 +114,9 @@ char *bin2hex(char *dst, const void *src, size_t count)
 		dst = hex_byte_pack(dst, *_src++);
 	return dst;
 }
+#if !defined(CONFIG_SPASM_KERNEL_BIN2HEX_SPASM) && !defined(CONFIG_SPASM_KERNEL_BIN2HEX_DUAL)
 EXPORT_SYMBOL(bin2hex);
+#endif
 
 /**
  * hex_dump_to_buffer - convert a blob of data to "hex ASCII" in memory

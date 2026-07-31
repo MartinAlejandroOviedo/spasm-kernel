@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// bin2hex — convert binary data to hex ASCII string.
+
+fn hex_char(v: u8) -> u8 {
+    if (v <= 9) {
+        return v + 48;
+    }
+    return v + 87;
+}
+
+export fn spasm_bin2hex(dst: ptr<u8>, src: ptr<u8>?, count: usize) -> ptr<u8> {
+    var loop: u8 = 1;
+    var b: u8 = 0;
+    var hi: u8 = 0;
+    var lo: u8 = 0;
+    var cnt: usize = count;
+    while (loop == 1) {
+        if (cnt == 0) {
+            loop = 0;
+        } else {
+            b = ptr_load<u8>(src);
+            hi = b >> 4;
+            hi = hex_char(hi);
+            ptr_store<u8>(dst, hi);
+            dst = ptr_offset<u8>(dst, 1);
+            lo = b & 15;
+            lo = hex_char(lo);
+            ptr_store<u8>(dst, lo);
+            dst = ptr_offset<u8>(dst, 1);
+            src = ptr_offset<u8>(src, 1);
+            cnt = cnt - 1;
+        }
+    }
+    return dst;
+}

@@ -369,3 +369,5 @@ obj-$(CONFIG_SPASM_KERNEL_BITMAP_EQUAL_SPASM) += bitmap_equal_spasm.o bitmap_equ
 obj-$(CONFIG_SPASM_KERNEL_BITMAP_EQUAL_DUAL) += bitmap_equal_spasm.o bitmap_equal_dual.o
 obj-$(CONFIG_SPASM_KERNEL_BITMAP_INTERSECTS_SPASM) += bitmap_intersects_spasm.o bitmap_intersects_spasm_entry.o bitmap_intersects_export.o
 obj-$(CONFIG_SPASM_KERNEL_BITMAP_INTERSECTS_DUAL) += bitmap_intersects_spasm.o bitmap_intersects_dual.o
+obj-$(CONFIG_SPASM_KERNEL_BIN2HEX_SPASM) += bin2hex_spasm.o bin2hex_spasm_entry.o bin2hex_export.o
+obj-$(CONFIG_SPASM_KERNEL_BIN2HEX_DUAL) += bin2hex_spasm.o bin2hex_dual.o
