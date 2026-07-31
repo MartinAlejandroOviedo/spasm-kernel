@@ -345,7 +345,14 @@ EXPORT_SYMBOL(kstrtos8);
  * pointed to by res is updated upon finding a match.
  */
 noinline
+#ifdef CONFIG_SPASM_KERNEL_KSTRTOBOOL_SPASM
+int __attribute__((weak)) kstrtobool(const char *s, bool *res)
+#elif defined(CONFIG_SPASM_KERNEL_KSTRTOBOOL_DUAL)
+#define kstrtobool spasm_kstrtobool_c
 int kstrtobool(const char *s, bool *res)
+#else
+int kstrtobool(const char *s, bool *res)
+#endif
 {
 	if (!s)
 		return -EINVAL;
@@ -390,7 +397,9 @@ int kstrtobool(const char *s, bool *res)
 
 	return -EINVAL;
 }
+#if !defined(CONFIG_SPASM_KERNEL_KSTRTOBOOL_SPASM) && !defined(CONFIG_SPASM_KERNEL_KSTRTOBOOL_DUAL)
 EXPORT_SYMBOL(kstrtobool);
+#endif
 
 /*
  * Since "base" would be a nonsense argument, this open-codes the

@@ -148,12 +148,19 @@ KERNEL_EXTERN_ALLOWLIST = {
     "int_sqrt": (("usize",), "usize"),
     "lcm": (("usize", "usize"), "usize"),
     "int_pow": (("u64", "u64"), "u64"),
+    "hex_to_bin": (("i32",), "i32"),
 }
 ATOMIC_EXPR_RE = re.compile(
     r"\s*(atomic_load|atomic_xchg|atomic_cmpxchg|atomic_add|atomic_sub)"
     r"<([A-Za-z_][A-Za-z0-9_]*)>\s*\(\s*"
     r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:,\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*))?"
     r"(?:\s*,\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*))?\s*\)\s*;?\s*"
+)
+PTR_OP_RE = re.compile(
+    r"\s*(ptr_load|ptr_store|ptr_offset)"
+    r"<([A-Za-z_][A-Za-z0-9_]*)>\s*\(\s*"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:,\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*))?"
+    r"\s*\)\s*;?\s*"
 )
 BARRIER_CALL_RE = re.compile(
     r"\s*(smp_mb|smp_rmb|smp_wmb|barrier)\s*\(\s*\)\s*;?\s*"
@@ -872,6 +879,22 @@ def parse_value_expression(value, variables, functions, expected_type):
             )
         elem_width = type_size_and_align(inner_type)[0]
         return ("array_access", base_name, index, inner_type, count, elem_width)
+    ptr_match = PTR_OP_RE.match(value)
+    if ptr_match:
+        op, ptr_type, ptr_name, arg_text = ptr_match.groups()
+        if ptr_name not in variables:
+            raise CompileError(f"variable no declarada: {ptr_name}")
+        var_type = variables[ptr_name]
+        if not is_pointer_type(var_type) and not is_nullable_pointer(var_type):
+            raise CompileError(f"{ptr_name} no es un puntero (es {var_type})")
+        if op != "ptr_offset" and ptr_type != expected_type:
+            raise CompileError(
+                f"{op}<{ptr_type}> retorna {ptr_type}, se esperaba {expected_type}"
+            )
+        arg = parse_operand(arg_text, variables) if arg_text else None
+        if arg and arg[0] == "imm":
+            validate_immediate(arg[1], "usize")
+        return ("ptr_op", op, ptr_name, ptr_type, arg)
     load_match = LOAD_RE.match(value)
     if load_match:
         load_type, resource_name, offset_text = load_match.groups()
@@ -1031,6 +1054,7 @@ def parse_statements(
         ("use", USE_RE),
         ("free", FREE_RE),
         ("store", STORE_RE),
+        ("ptr_op", PTR_OP_RE),
         ("array_assign", ARRAY_ASSIGN_RE),
         ("barrier", BARRIER_CALL_RE),
         ("return", RETURN_RE),
@@ -1280,6 +1304,18 @@ def parse_statements(
                 )
             elif statement_kind == "barrier":
                 statements.append(("barrier", values[0]))
+            elif statement_kind == "ptr_op":
+                op, ptr_type, ptr_name, arg_text = values[:4]
+                if ptr_name not in variables:
+                    raise CompileError(f"variable no declarada: {ptr_name}")
+                if not is_pointer_type(variables[ptr_name]) and not is_nullable_pointer(variables[ptr_name]):
+                    raise CompileError(f"{ptr_name} no es un puntero")
+                if op != "ptr_store":
+                    raise CompileError(f"{op} solo valido en expresion, no como sentencia")
+                arg = parse_operand(arg_text, variables) if arg_text else None
+                if arg and arg[0] == "imm":
+                    validate_immediate(arg[1], ptr_type)
+                statements.append(("ptr_store_stmt", ptr_name, ptr_type, arg))
             elif statement_kind == "field_assign":
                 base_name, dot_chain, expression_text = values
                 if base_name not in variables:
@@ -1670,6 +1706,27 @@ def emit_expression(
             emit_load_operand(lines, operand, slots, register)
         symbol = function_name if external else f"spasm_fn_{function_name}"
         lines.append(f"\tcall {symbol}")
+        return
+    if expression[0] == "ptr_op":
+        _kind, op, ptr_name, ptr_type, arg = expression
+        lines.append(f"\tmovq {slots[ptr_name]}(%rbp), %rax")
+        if op == "ptr_load":
+            width = type_size_and_align(ptr_type)[0]
+            instr = {1: "movzbq", 2: "movzwq", 4: "movl", 8: "movq"}.get(width, "movq")
+            if width == 4:
+                lines.append(f"\t{instr} (%rax), %eax")
+            else:
+                lines.append(f"\t{instr} (%rax), %rax")
+        elif op == "ptr_store":
+            emit_load_operand(lines, arg, slots, "rcx")
+            width = type_size_and_align(ptr_type)[0]
+            instr = {1: "movb", 2: "movw", 4: "movl", 8: "movq"}.get(width, "movq")
+            reg = {1: "%cl", 2: "%cx", 4: "%ecx", 8: "%rcx"}[width]
+            lines.append(f"\t{instr} {reg}, (%rax)")
+            lines.append("\tmovq %rcx, %rax")
+        elif op == "ptr_offset":
+            emit_load_operand(lines, arg, slots, "rcx")
+            lines.append("\taddq %rcx, %rax")
         return
     if expression[0] == "atomic":
         _kind, op, ptr_name, atom_type, arg1, arg2 = expression
@@ -2110,6 +2167,14 @@ def emit_function(
                 lines.append(f"\t{barrier_insn}")
             else:
                 lines.append("\t# compiler barrier")
+        elif statement_kind == "ptr_store_stmt":
+            ptr_name, ptr_type, arg = statement[1:]
+            lines.append(f"\tmovq {slots[ptr_name]}(%rbp), %rax")
+            emit_load_operand(lines, arg, slots, "rcx")
+            width = type_size_and_align(ptr_type)[0]
+            instr = {1: "movb", 2: "movw", 4: "movl", 8: "movq"}.get(width, "movq")
+            reg = {1: "%cl", 2: "%cx", 4: "%ecx", 8: "%rcx"}[width]
+            lines.append(f"\t{instr} {reg}, (%rax)")
         elif statement_kind == "if":
             condition, then_statements, else_statements = statement[1:]
             left, comparator, right = condition

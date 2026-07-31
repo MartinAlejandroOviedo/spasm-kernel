@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// sysfs_streq — compare strings with newline-tolerant termination.
+
+export fn spasm_sysfs_streq(s1: ptr<u8>, s2: ptr<u8>) -> usize {
+    var a: u8 = 0;
+    var b: u8 = 0;
+    var loop: u8 = 1;
+    var s1n: ptr<u8> = s1;
+    var s2n: ptr<u8> = s2;
+    var an: u8 = 0;
+    var bn: u8 = 0;
+    while (loop == 1) {
+        a = ptr_load<u8>(s1);
+        b = ptr_load<u8>(s2);
+        if (a == 0) {
+            loop = 0;
+        } else {
+            if (a == b) {
+                s1 = ptr_offset<u8>(s1, 1);
+                s2 = ptr_offset<u8>(s2, 1);
+            } else {
+                loop = 0;
+            }
+        }
+    }
+    if (a == b) {
+        return 1;
+    }
+    if (a == 0) {
+        if (b == 10) {
+            s2n = ptr_offset<u8>(s2, 1);
+            bn = ptr_load<u8>(s2n);
+            if (bn == 0) {
+                return 1;
+            }
+        }
+    }
+    if (a == 10) {
+        s1n = ptr_offset<u8>(s1, 1);
+        an = ptr_load<u8>(s1n);
+        if (an == 0) {
+            if (b == 0) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}

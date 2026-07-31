@@ -842,13 +842,22 @@ EXPORT_SYMBOL_GPL(devm_kasprintf_strarray);
  *
  * Returns a pointer to the first non-whitespace character in @str.
  */
+#ifdef CONFIG_SPASM_KERNEL_SKIP_SPACES_SPASM
+char __attribute__((weak)) *skip_spaces(const char *str)
+#elif defined(CONFIG_SPASM_KERNEL_SKIP_SPACES_DUAL)
+#define skip_spaces spasm_skip_spaces_c
 char *skip_spaces(const char *str)
+#else
+char *skip_spaces(const char *str)
+#endif
 {
 	while (isspace(*str))
 		++str;
 	return (char *)str;
 }
+#if !defined(CONFIG_SPASM_KERNEL_SKIP_SPACES_SPASM) && !defined(CONFIG_SPASM_KERNEL_SKIP_SPACES_DUAL)
 EXPORT_SYMBOL(skip_spaces);
+#endif
 
 /**
  * strim - Removes leading and trailing whitespace from @s.
@@ -886,7 +895,14 @@ EXPORT_SYMBOL(strim);
  * geared for use with sysfs input strings, which generally terminate
  * with newlines but are compared against values without newlines.
  */
+#ifdef CONFIG_SPASM_KERNEL_SYSFS_STREQ_SPASM
+bool __attribute__((weak)) sysfs_streq(const char *s1, const char *s2)
+#elif defined(CONFIG_SPASM_KERNEL_SYSFS_STREQ_DUAL)
+#define sysfs_streq spasm_sysfs_streq_c
 bool sysfs_streq(const char *s1, const char *s2)
+#else
+bool sysfs_streq(const char *s1, const char *s2)
+#endif
 {
 	while (*s1 && *s1 == *s2) {
 		s1++;
@@ -901,7 +917,9 @@ bool sysfs_streq(const char *s1, const char *s2)
 		return true;
 	return false;
 }
+#if !defined(CONFIG_SPASM_KERNEL_SYSFS_STREQ_SPASM) && !defined(CONFIG_SPASM_KERNEL_SYSFS_STREQ_DUAL)
 EXPORT_SYMBOL(sysfs_streq);
+#endif
 
 /**
  * match_string - matches given string in an array
@@ -981,7 +999,14 @@ EXPORT_SYMBOL(__sysfs_match_string);
  *
  * Return: pointer to the string @str itself.
  */
+#ifdef CONFIG_SPASM_KERNEL_STRREPLACE_SPASM
+char __attribute__((weak)) *strreplace(char *str, char old, char new)
+#elif defined(CONFIG_SPASM_KERNEL_STRREPLACE_DUAL)
+#define strreplace spasm_strreplace_c
 char *strreplace(char *str, char old, char new)
+#else
+char *strreplace(char *str, char old, char new)
+#endif
 {
 	char *s = str;
 
@@ -990,7 +1015,9 @@ char *strreplace(char *str, char old, char new)
 			*s = new;
 	return str;
 }
+#if !defined(CONFIG_SPASM_KERNEL_STRREPLACE_SPASM) && !defined(CONFIG_SPASM_KERNEL_STRREPLACE_DUAL)
 EXPORT_SYMBOL(strreplace);
+#endif
 
 /**
  * memcpy_and_pad - Copy one buffer to another with padding

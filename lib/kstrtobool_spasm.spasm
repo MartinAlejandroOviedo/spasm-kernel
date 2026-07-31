@@ -1,0 +1,110 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// kstrtobool — parse boolean from string, write result via pointer.
+
+export fn spasm_kstrtobool(s: ptr<u8>?, res: ptr<u8>) -> i32 {
+    var s2: ptr<u8>? = s;
+    var c: u8 = 0;
+    var c2: u8 = 0;
+    if (s == 0) {
+        return -22;
+    }
+    c = ptr_load<u8>(s);
+    if (c == 101) {
+        ptr_store<u8>(res, 1);
+        return 0;
+    }
+    if (c == 69) {
+        ptr_store<u8>(res, 1);
+        return 0;
+    }
+    if (c == 121) {
+        ptr_store<u8>(res, 1);
+        return 0;
+    }
+    if (c == 89) {
+        ptr_store<u8>(res, 1);
+        return 0;
+    }
+    if (c == 116) {
+        ptr_store<u8>(res, 1);
+        return 0;
+    }
+    if (c == 84) {
+        ptr_store<u8>(res, 1);
+        return 0;
+    }
+    if (c == 49) {
+        ptr_store<u8>(res, 1);
+        return 0;
+    }
+    if (c == 100) {
+        ptr_store<u8>(res, 0);
+        return 0;
+    }
+    if (c == 68) {
+        ptr_store<u8>(res, 0);
+        return 0;
+    }
+    if (c == 110) {
+        ptr_store<u8>(res, 0);
+        return 0;
+    }
+    if (c == 78) {
+        ptr_store<u8>(res, 0);
+        return 0;
+    }
+    if (c == 102) {
+        ptr_store<u8>(res, 0);
+        return 0;
+    }
+    if (c == 70) {
+        ptr_store<u8>(res, 0);
+        return 0;
+    }
+    if (c == 48) {
+        ptr_store<u8>(res, 0);
+        return 0;
+    }
+    if (c == 111) {
+        s2 = ptr_offset<u8>(s, 1);
+        c2 = ptr_load<u8>(s2);
+        if (c2 == 110) {
+            ptr_store<u8>(res, 1);
+            return 0;
+        }
+        if (c2 == 78) {
+            ptr_store<u8>(res, 1);
+            return 0;
+        }
+        if (c2 == 102) {
+            ptr_store<u8>(res, 0);
+            return 0;
+        }
+        if (c2 == 70) {
+            ptr_store<u8>(res, 0);
+            return 0;
+        }
+    }
+    if (c == 79) {
+        s2 = ptr_offset<u8>(s, 1);
+        c2 = ptr_load<u8>(s2);
+        if (c2 == 110) {
+            ptr_store<u8>(res, 1);
+            return 0;
+        }
+        if (c2 == 78) {
+            ptr_store<u8>(res, 1);
+            return 0;
+        }
+        if (c2 == 102) {
+            ptr_store<u8>(res, 0);
+            return 0;
+        }
+        if (c2 == 70) {
+            ptr_store<u8>(res, 0);
+            return 0;
+        }
+    }
+    return -22;
+}

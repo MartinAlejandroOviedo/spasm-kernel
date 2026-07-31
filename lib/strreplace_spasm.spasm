@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// strreplace — replace all occurrences of 'old' with 'new' in string.
+
+export fn spasm_strreplace(s: ptr<u8>, old: u8, new: u8) -> ptr<u8> {
+    var orig: ptr<u8> = s;
+    var loop: u8 = 1;
+    var c: u8 = 0;
+    while (loop == 1) {
+        c = ptr_load<u8>(s);
+        if (c == 0) {
+            loop = 0;
+        } else {
+            if (c == old) {
+                ptr_store<u8>(s, new);
+            } else {
+            }
+            s = ptr_offset<u8>(s, 1);
+        }
+    }
+    return orig;
+}

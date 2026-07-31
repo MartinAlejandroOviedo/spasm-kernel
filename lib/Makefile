@@ -344,3 +344,12 @@ obj-$(CONFIG_GENERIC_LIB_DEVMEM_IS_ALLOWED) += devmem_is_allowed.o
 obj-$(CONFIG_FIRMWARE_TABLE) += fw_table.o
 
 subdir-$(CONFIG_FORTIFY_SOURCE) += test_fortify
+
+obj-$(CONFIG_SPASM_KERNEL_STRREPLACE_SPASM) += strreplace_spasm.o strreplace_spasm_entry.o strreplace_export.o
+obj-$(CONFIG_SPASM_KERNEL_STRREPLACE_DUAL) += strreplace_spasm.o strreplace_dual.o
+obj-$(CONFIG_SPASM_KERNEL_SYSFS_STREQ_SPASM) += sysfs_streq_spasm.o sysfs_streq_spasm_entry.o sysfs_streq_export.o
+obj-$(CONFIG_SPASM_KERNEL_SYSFS_STREQ_DUAL) += sysfs_streq_spasm.o sysfs_streq_dual.o
+obj-$(CONFIG_SPASM_KERNEL_SKIP_SPACES_SPASM) += skip_spaces_spasm.o skip_spaces_spasm_entry.o skip_spaces_export.o
+obj-$(CONFIG_SPASM_KERNEL_SKIP_SPACES_DUAL) += skip_spaces_spasm.o skip_spaces_dual.o
+obj-$(CONFIG_SPASM_KERNEL_KSTRTOBOOL_SPASM) += kstrtobool_spasm.o kstrtobool_spasm_entry.o kstrtobool_export.o
+obj-$(CONFIG_SPASM_KERNEL_KSTRTOBOOL_DUAL) += kstrtobool_spasm.o kstrtobool_dual.o
