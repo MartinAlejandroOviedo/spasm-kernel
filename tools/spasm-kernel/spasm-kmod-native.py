@@ -1051,6 +1051,7 @@ def parse_value_expression(value, variables, functions, expected_type):
         tuple(args),
         function["return_type"],
         function.get("external", False),
+        function.get("exported", False),
     )
 
 
@@ -1756,10 +1757,13 @@ def emit_expression(
                 lines.append(f"\t{instruction} (%rax), %rax")
         return
     if expression[0] == "call":
-        _kind, function_name, arguments, _return_type, external = expression
+        _kind, function_name, arguments, _return_type, external, exported = expression
         for operand, register in zip(arguments, ARG_REGISTERS):
             emit_load_operand(lines, operand, slots, register)
-        symbol = function_name if external else f"spasm_fn_{function_name}"
+        if external or exported:
+            symbol = function_name
+        else:
+            symbol = f"spasm_fn_{function_name}"
         lines.append(f"\tcall {symbol}")
         return
     if expression[0] == "ptr_op":
