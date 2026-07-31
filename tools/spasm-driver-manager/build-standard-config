@@ -1,0 +1,30 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -ne 3 ]; then
+	echo "uso: $0 KERNEL_SRC BASE_CONFIG OUTPUT_DIR" >&2
+	exit 2
+fi
+
+kernel_src=$(CDPATH= cd -- "$1" && pwd)
+base_config=$(readlink -f "$2")
+output_dir=$3
+self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH= cd -- "$self_dir/../.." && pwd)
+fragment="$repo_root/profiles/standard-amd64.config"
+
+mkdir -p "$output_dir"
+output_dir=$(CDPATH= cd -- "$output_dir" && pwd)
+
+(
+	cd "$kernel_src"
+	KCONFIG_CONFIG="$output_dir/.config" \
+		scripts/kconfig/merge_config.sh -m -O "$output_dir" \
+		"$base_config" "$fragment"
+	make O="$output_dir" olddefconfig
+)
+
+"$self_dir/profile-audit" \
+	--config "$output_dir/.config" \
+	--profile "$fragment" \
+	--baseline "$base_config"

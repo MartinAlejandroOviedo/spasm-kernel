@@ -2,7 +2,7 @@
 
 ## Estado y alcance
 
-Este documento es la norma ejecutable de Fase 2 para funciones de SpASM Kernel
+Este documento es la norma ejecutable de Fase 2 para funciones de spasm-kernel
 compiladas desde SpASM. Define qué debe observar Linux sin depender del lenguaje
 fuente. Aplica al target:
 
@@ -78,12 +78,13 @@ V2 sigue la ABI usada por el kernel Linux x86_64 para enteros y punteros:
 No se admiten más de seis argumentos. Los tipos exportables estables son:
 
 ```text
-u64 i64 usize isize ptr<T> ptr<T>?
+u8 i8 u16 i16 u32 i32 u64 i64 bool usize isize ptr<T> ptr<T>?
 ```
 
-Los tipos `u8/i8/u16/i16/u32/i32/bool` siguen disponibles internamente, pero
-V2 los rechaza en una firma `export fn` hasta que el backend implemente
-extensión, truncado y compatibilidad C completos.
+Los argumentos angostos se normalizan al ingresar según su signo y el retorno
+se trunca al ancho declarado. La conformidad prueba explícitamente el caso
+exportado `u32 → u32`; los wrappers de funciones Linux conservan además la
+firma C pública exacta cuando la declaración del kernel usa un ancho distinto.
 
 ## Registros y pila
 

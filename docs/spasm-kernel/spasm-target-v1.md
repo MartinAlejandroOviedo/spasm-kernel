@@ -1,8 +1,8 @@
-# Contrato SpASM target SpASM Kernel x86_64 v1
+# Contrato SpASM target spasm-kernel x86_64 v1
 
 ## Objetivo
 
-Separar el consumidor SpASM Kernel de la implementación provisional del backend.
+Separar el consumidor spasm-kernel de la implementación provisional del backend.
 Kbuild y `tools/spasm-kernel/project` no deben conocer el parser ni el generador
 utilizados internamente.
 
@@ -14,7 +14,7 @@ spasm-kernel-x86_64
 
 ## Entrada oficial
 
-SpASM Kernel registra el directorio del target mediante `SPASMC_TARGET_PATH` y
+spasm-kernel registra el directorio del target mediante `SPASMC_TARGET_PATH` y
 compila siempre a través del dispatcher oficial:
 
 ```sh

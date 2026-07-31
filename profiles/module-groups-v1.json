@@ -1,0 +1,30 @@
+{
+  "schema": "spasm-kernel-module-groups-v1",
+  "groups": {
+    "core": [
+      "nvme", "ext4", "vfat", "nls_cp437", "nls_ascii", "squashfs",
+      "loop", "binfmt_misc", "autofs4", "configfs", "ahci", "ata_piix",
+      "sd_mod", "usb_storage", "uas", "xhci_pci", "usbhid",
+      "hid_generic", "evdev", "dm_mod", "dm_crypt"
+    ],
+    "desktop": [
+      "amdgpu", "i915", "nouveau", "r8169", "tun", "nf_tables",
+      "nft_compat", "nft_chain_nat", "nft_masq", "nft_ct", "xt_mark",
+      "xt_connmark", "xt_comment", "xt_multiport", "xt_tcpudp",
+      "xt_addrtype", "xt_conntrack", "xt_MASQUERADE", "e1000e", "igc",
+      "iwlwifi", "ath9k", "rtw88_pci", "rtw89_pci", "snd_hda_intel",
+      "snd_hda_codec_hdmi", "snd_usb_audio", "btusb", "uvcvideo",
+      "uinput", "mousedev", "psmouse", "i2c_dev", "msr", "snd_seq",
+      "snd_timer"
+    ],
+    "extra": [
+      "kvm_amd", "vfio_pci", "vhost_net", "wireguard", "thunderbolt",
+      "firewire_core", "btrfs", "xfs", "f2fs", "ntfs3", "exfat",
+      "cifs", "nfs", "bridge", "8021q"
+    ],
+    "legacy": [
+      "r8723bs", "com20020_pci", "eni", "comedi", "pata_pcmcia",
+      "parport_pc", "lp", "ppdev"
+    ]
+  }
+}

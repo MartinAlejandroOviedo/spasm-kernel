@@ -1,0 +1,35 @@
+#!/bin/sh
+set -eu
+
+self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH= cd -- "$self_dir/../../../.." && pwd)
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT HUP INT TERM
+
+"$repo_root/tools/spasm-care-agent/build-policy-library" "$work/policy.so" >/dev/null
+"$repo_root/tools/spasm-care-agent/spasm-care-agent" \
+	--once \
+	--policy-lib "$work/policy.so" \
+	--runtime-dir "$work/run"
+
+python3 - "$work/run/status.json" <<'PY'
+import json
+import pathlib
+import sys
+
+status = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert status["schema"] == "spasm-care-status-v1"
+assert status["policy"] == "spasm_care_level_v1"
+assert status["policy_language"] == "SpASM"
+assert status["mode"] == "observe"
+assert status["level"] in range(5)
+assert status["level_name"] in ("GREEN", "YELLOW", "ORANGE", "RED", "EMERGENCY")
+assert 0 <= status["signals"]["cpu_pct"] <= 100
+assert status["signals"]["ram_free_mb"] > 0
+print(
+    "Machine Care agent: OK "
+    f"level={status['level_name']} cpu={status['signals']['cpu_pct']}% "
+    f"temp={status['signals']['cpu_temp_c']}C "
+    f"ram={status['signals']['ram_free_mb']}MiB"
+)
+PY

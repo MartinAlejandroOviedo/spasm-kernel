@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entrada estable del target nativo SpASM para SpASM Kernel x86_64."""
+"""Entrada estable del target nativo SpASM para spasm-kernel x86_64."""
 
 import argparse
 from pathlib import Path
@@ -14,7 +14,7 @@ BACKEND = Path(__file__).with_name("spasm-kmod-native.py")
 def parser():
     command = argparse.ArgumentParser(
         prog="spasm-target-spasm-kernel-x86_64",
-        description="Compila un módulo SpASM nativo para SpASM Kernel x86_64.",
+        description="Compila un módulo SpASM nativo para spasm-kernel x86_64.",
     )
     command.add_argument("source", type=Path, help="fuente .spasm")
     output = command.add_mutually_exclusive_group(required=True)

@@ -61,7 +61,7 @@ ARG_REGISTERS = ("rdi", "rsi", "rdx", "rcx", "r8", "r9")
 ARG_REGISTERS_32 = ("edi", "esi", "edx", "ecx", "r8d", "r9d")
 EXPR_RE = re.compile(
     r"^\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*)"
-    r"(?:\s*([+\-*/%])\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*))?\s*$"
+    r"(?:\s*(<<|>>|[+\-*/%&|^])\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*))?\s*$"
 )
 COND_RE = re.compile(
     r"^\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*)\s*"
@@ -124,6 +124,9 @@ TYPE_WIDTHS = {
 ABI_V2_EXPORTED_TYPES = {"u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64", "usize", "isize", "bool"}
 KERNEL_EXTERN_ALLOWLIST = {
     "gcd": (("usize", "usize"), "usize"),
+    "int_sqrt": (("usize",), "usize"),
+    "lcm": (("usize", "usize"), "usize"),
+    "int_pow": (("u64", "u64"), "u64"),
 }
 
 STRUCT_LAYOUTS = {}
@@ -499,6 +502,8 @@ def extract_externs(source):
             }
         )
         end = match.end()
+        while end < len(source) and source[end] in (";", " ", "\t", "\n", "\r"):
+            end += 1
         spans.append((match.start(), end))
         position = end
     remaining = list(source)
@@ -1351,6 +1356,19 @@ def emit_expression(
             lines.append("\tsubq %rcx, %rax")
         elif operator == "*":
             lines.append("\timulq %rcx, %rax")
+        elif operator == "&":
+            lines.append("\tandq %rcx, %rax")
+        elif operator == "|":
+            lines.append("\torq %rcx, %rax")
+        elif operator == "^":
+            lines.append("\txorq %rcx, %rax")
+        elif operator == "<<":
+            lines.append("\tshlq %cl, %rax")
+        elif operator == ">>":
+            if value_type in ("u8", "u16", "u32", "u64", "usize"):
+                lines.append("\tshrq %cl, %rax")
+            else:
+                lines.append("\tsarq %cl, %rax")
         else:
             lines.extend(
                 [
@@ -1438,6 +1456,24 @@ def compute_slots(resources, params, statements):
         offset += width
         slots[name] = -(offset)
     return slots, offset
+
+
+def statement_list_terminates(statements):
+    """Return True when the final statement cannot fall through."""
+    if not statements:
+        return False
+    statement = statements[-1]
+    if statement[0] in ("return", "return_expr"):
+        return True
+    if statement[0] == "if":
+        then_statements = statement[2]
+        else_statements = statement[3]
+        return (
+            bool(else_statements)
+            and statement_list_terminates(then_statements)
+            and statement_list_terminates(else_statements)
+        )
+    return False
 
 
 def emit_function(
@@ -1650,7 +1686,9 @@ def emit_function(
                 ]
             )
             emit_statement_list(then_statements)
-            lines.extend([f"\tjmp {end_label}", f"{else_label}:"])
+            if not statement_list_terminates(then_statements):
+                lines.append(f"\tjmp {end_label}")
+            lines.append(f"{else_label}:")
             emit_statement_list(else_statements)
             lines.append(f"{end_label}:")
         elif statement_kind == "while":

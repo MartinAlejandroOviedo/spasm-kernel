@@ -14,7 +14,7 @@ SpASM durante la fase de estabilización.
 
 ## Estrategia
 
-SpASM Kernel llama al símbolo original de Linux y a la implementación SpASM con
+spasm-kernel llama al símbolo original de Linux y a la implementación SpASM con
 los mismos argumentos dentro del módulo cargado en Ring 0. Solamente registra
 éxito si cada resultado coincide con Linux y con el valor esperado.
 

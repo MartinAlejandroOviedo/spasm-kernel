@@ -1,0 +1,28 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+
+self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH= cd -- "$self_dir/../.." && pwd)
+spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
+output=${1:-"$self_dir/libspasm-care-policy.so"}
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT HUP INT TERM
+
+SPASMC_TARGET_PATH="$repo_root/tools/spasm-kernel" \
+python3 "$spasmc" \
+	"$repo_root/lib/spasm_care_policy.spasm" \
+	--target spasm-kernel-x86_64 \
+	--out "$work/policy.S" >/dev/null
+
+# This policy is pure and shared by kernel/userspace consumers. The userspace
+# library needs architectural instructions instead of the kernel macro names.
+sed -i \
+	-e 's|#include <asm/nospec-branch.h>|#define ENDBR endbr64|' \
+	-e '/#define ENDBR endbr64/a #define RET ret' \
+	"$work/policy.S"
+
+cc -shared -fPIC -Wl,-z,relro,-z,now \
+	"$work/policy.S" -o "$output"
+
+echo "$output"

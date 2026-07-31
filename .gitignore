@@ -12,6 +12,7 @@ built-in.a
 __pycache__/
 *.pyc
 *.egg-info/
+/packages/
 
 # Bloquear archivos del kernel original (no los nuestros)
 arch/

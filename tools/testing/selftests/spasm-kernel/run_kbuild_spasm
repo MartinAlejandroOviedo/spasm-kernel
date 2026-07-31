@@ -5,7 +5,7 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
 project_parent=$(CDPATH= cd -- "$kernel_src/.." && pwd)
-kernel_build=${KERNEL_BUILD:-"$project_parent/build-nice-spasm-gcd"}
+kernel_build=${KERNEL_BUILD:-"$project_parent/build-spasm-kernel"}
 spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
 host_tools="$kernel_src/tools/spasm-kernel/host-tools"
 object="$kernel_build/lib/math/gcd_spasm.o"

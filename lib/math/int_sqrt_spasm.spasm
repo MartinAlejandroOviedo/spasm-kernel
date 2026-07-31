@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 //
-// SpASM Kernel replacement for Linux int_sqrt().
+// spasm-kernel replacement for Linux int_sqrt().
 // Pure function: no state, no side effects.
 
 export fn spasm_int_sqrt(x: usize) -> usize {

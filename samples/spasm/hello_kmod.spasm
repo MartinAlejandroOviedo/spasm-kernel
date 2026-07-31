@@ -1,7 +1,7 @@
 module "spasm_hello"
 license "GPL"
 author "Martin Alejandro Oviedo"
-description "Primer modulo nativo SpASM del proyecto SpASM Kernel"
+description "Primer modulo nativo SpASM del proyecto spasm-kernel"
 
 extern fn gcd(a: usize, b: usize) -> usize
 
@@ -28,7 +28,7 @@ fn spasm_gcd_internal(a: usize, b: usize) -> usize {
 }
 
 on load {
-	klog("SpASM Kernel: SpASM nativo activo en Ring 0")
+	klog("spasm-kernel: SpASM nativo activo en Ring 0")
 	recurso buffer = kalloc<u8>(256) else return -ENOMEM
 	guardar<u32>(buffer, 4, 424242);
 	var lectura: u32 = cargar<u32>(buffer, 4);
@@ -160,4 +160,5 @@ on load {
 
 on unload {
 	klog("SpASM nativo descargado")
+	return 0
 }

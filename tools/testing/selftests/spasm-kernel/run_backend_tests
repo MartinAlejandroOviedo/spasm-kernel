@@ -41,7 +41,7 @@ expect_success valid_module \
 	"$target" "$sample" --out-dir "$test_root/valid"
 test -s "$test_root/valid/spasm_hello_native.S"
 test -s "$test_root/valid/Makefile"
-if grep -q '^spasm_fn_spasm_gcd:' \
+if grep -q '^spasm_fn_spasm_gcd_internal:' \
 	"$test_root/valid/spasm_hello_native.S" &&
 	grep -q 'call gcd' "$test_root/valid/spasm_hello_native.S" &&
 	grep -q 'idivq' "$test_root/valid/spasm_hello_native.S"; then
@@ -83,9 +83,17 @@ expect_failure builtin_requires_export \
 printf '%s\n' \
 	'export fn narrow(a: u32) -> u32 { return a; }' \
 	>"$test_root/narrow_export.spasm"
-expect_failure builtin_rejects_unstable_narrow_abi \
+expect_success builtin_accepts_stable_narrow_abi \
 	"$target" "$test_root/narrow_export.spasm" \
 	--out "$test_root/narrow_export.S"
+if grep -q '^narrow:' "$test_root/narrow_export.S" &&
+	grep -q 'movl %edi, %eax' "$test_root/narrow_export.S"; then
+	echo "ok - builtin_narrow_abi_zero_extends_argument"
+	pass=$((pass + 1))
+else
+	echo "not ok - builtin_narrow_abi_zero_extends_argument"
+	fail=$((fail + 1))
+fi
 
 printf '%s\n' \
 	'export fn init_module(a: usize) -> usize { return a; }' \

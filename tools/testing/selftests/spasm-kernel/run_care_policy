@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH= cd -- "$self_dir/../../../.." && pwd)
+spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT HUP INT TERM
+
+SPASMC_TARGET_PATH="$repo_root/tools/spasm-kernel" \
+python3 "$spasmc" \
+	--target spasm-kernel-x86_64 \
+	--out "$work/spasm_care_policy.S" \
+	"$repo_root/lib/spasm_care_policy.spasm"
+
+# The generated source uses the kernel's ENDBR/RET macros. For this userspace
+# vector harness only, provide their architectural equivalents.
+sed -i \
+	-e 's|#include <asm/nospec-branch.h>|#define ENDBR endbr64|' \
+	-e '/#define ENDBR endbr64/a #define RET ret' \
+	"$work/spasm_care_policy.S"
+
+cc -O2 -Wall -Wextra -no-pie \
+	"$self_dir/care_policy_vectors.c" \
+	"$work/spasm_care_policy.S" \
+	-o "$work/care-policy-vectors"
+
+"$work/care-policy-vectors"
