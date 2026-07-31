@@ -56,12 +56,13 @@ EXPORT_SYMBOL(crc_itu_t_table);
  * Returns the updated CRC value
  */
 #ifdef CONFIG_SPASM_KERNEL_CRC_ITU_T_SPASM
-u16 __attribute__((weak)) crc_itu_t(
+u16 __attribute__((weak)) crc_itu_t(u16 crc, const u8 *buffer, size_t len)
 #elif defined(CONFIG_SPASM_KERNEL_CRC_ITU_T_DUAL)
 #define crc_itu_t spasm_crc_itu_t_c
-u16 crc_itu_t(
+u16 crc_itu_t(u16 crc, const u8 *buffer, size_t len)
 #else
 u16 crc_itu_t(u16 crc, const u8 *buffer, size_t len)
+#endif
 {
 	while (len--)
 		crc = crc_itu_t_byte(crc, *buffer++);

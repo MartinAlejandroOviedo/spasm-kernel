@@ -62,12 +62,13 @@ static const u8 crc7_be_syndrome_table[256] = {
  *
  */
 #ifdef CONFIG_SPASM_KERNEL_CRC7_BE_SPASM
-u8 __attribute__((weak)) crc7_be(
+u8 __attribute__((weak)) crc7_be(u8 crc, const u8 *buffer, size_t len)
 #elif defined(CONFIG_SPASM_KERNEL_CRC7_BE_DUAL)
 #define crc7_be spasm_crc7_be_c
-u8 crc7_be(
+u8 crc7_be(u8 crc, const u8 *buffer, size_t len)
 #else
 u8 crc7_be(u8 crc, const u8 *buffer, size_t len)
+#endif
 {
 	while (len--)
 		crc = crc7_be_syndrome_table[crc ^ *buffer++];

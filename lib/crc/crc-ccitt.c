@@ -55,12 +55,13 @@ EXPORT_SYMBOL(crc_ccitt_table);
  *	@len: number of bytes in the buffer
  */
 #ifdef CONFIG_SPASM_KERNEL_CRC_CCITT_SPASM
-u16 __attribute__((weak)) crc_ccitt(
+u16 __attribute__((weak)) crc_ccitt(u16 crc, u8 const *buffer, size_t len)
 #elif defined(CONFIG_SPASM_KERNEL_CRC_CCITT_DUAL)
 #define crc_ccitt spasm_crc_ccitt_c
-u16 crc_ccitt(
+u16 crc_ccitt(u16 crc, u8 const *buffer, size_t len)
 #else
 u16 crc_ccitt(u16 crc, u8 const *buffer, size_t len)
+#endif
 {
 	while (len--)
 		crc = crc_ccitt_byte(crc, *buffer++);
