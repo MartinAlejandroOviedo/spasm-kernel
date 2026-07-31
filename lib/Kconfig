@@ -74,14 +74,49 @@ endchoice
 
 config SPASM_KERNEL_CARE_POLICY
 	bool "spasm-kernel Machine Care policy"
-	depends on SPASM_KERNEL_GLOBAL_MIGRATION
-	default y if SPASM_KERNEL_MODE_SPASM
-	default y if SPASM_KERNEL_MODE_DUAL
+	depends on X86_64
+	default y
 	help
 	  Compile the Machine Care policy engine written in SpASM.
 	  This provides spasm_care_level_v1() which maps CPU usage,
 	  temperature, and free RAM to a system care level
 	  (GREEN, YELLOW, ORANGE, RED, EMERGENCY).
+
+choice
+	prompt "spasm-kernel __sw_hweight8 implementation"
+	default SPASM_KERNEL_HWEIGHT8_SPASM if SPASM_KERNEL_MODE_SPASM
+	default SPASM_KERNEL_HWEIGHT8_DUAL if SPASM_KERNEL_MODE_DUAL
+	default SPASM_KERNEL_HWEIGHT8_C
+	depends on X86_64
+
+config SPASM_KERNEL_HWEIGHT8_C
+	bool "Original Linux C implementation"
+
+config SPASM_KERNEL_HWEIGHT8_SPASM
+	bool "SpASM implementation"
+
+config SPASM_KERNEL_HWEIGHT8_DUAL
+	bool "Dual C/SpASM comparison"
+
+endchoice
+
+choice
+	prompt "spasm-kernel __sw_hweight16 implementation"
+	default SPASM_KERNEL_HWEIGHT16_SPASM if SPASM_KERNEL_MODE_SPASM
+	default SPASM_KERNEL_HWEIGHT16_DUAL if SPASM_KERNEL_MODE_DUAL
+	default SPASM_KERNEL_HWEIGHT16_C
+	depends on X86_64
+
+config SPASM_KERNEL_HWEIGHT16_C
+	bool "Original Linux C implementation"
+
+config SPASM_KERNEL_HWEIGHT16_SPASM
+	bool "SpASM implementation"
+
+config SPASM_KERNEL_HWEIGHT16_DUAL
+	bool "Dual C/SpASM comparison"
+
+endchoice
 
 config RAID6_PQ
 	tristate

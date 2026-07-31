@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// Hamming weight for 8-bit values — SpASM implementation.
+// Equivalent to: (res + (res >> 4)) & 0x0F after bit-folding.
+
+export fn spasm_hweight8(w: u32) -> u32 {
+    var res: u32 = w;
+    var t: u32 = res >> 1;
+    t = t & 85;
+    res = res - t;
+    t = res >> 2;
+    t = t & 51;
+    res = res & 51;
+    res = res + t;
+    t = res >> 4;
+    res = res + t;
+    res = res & 15;
+    return res;
+}

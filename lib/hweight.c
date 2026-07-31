@@ -3,6 +3,14 @@
 #include <linux/bitops.h>
 #include <asm/types.h>
 
+#if defined(CONFIG_SPASM_KERNEL_HWEIGHT8_DUAL)
+#define __sw_hweight8 spasm_hweight8_c
+#endif
+
+#if defined(CONFIG_SPASM_KERNEL_HWEIGHT16_DUAL)
+#define __sw_hweight16 spasm_hweight16_c
+#endif
+
 /**
  * DOC: __sw_hweightN - returns the hamming weight of a N-bit word
  * @w: the word to weigh
@@ -10,6 +18,7 @@
  * The Hamming Weight of a number is the total number of bits set in it.
  */
 
+#ifndef CONFIG_SPASM_KERNEL_HWEIGHT8_SPASM
 unsigned int __sw_hweight32(unsigned int w)
 {
 #ifdef CONFIG_ARCH_HAS_FAST_MULTIPLIER
@@ -27,6 +36,7 @@ unsigned int __sw_hweight32(unsigned int w)
 }
 EXPORT_SYMBOL(__sw_hweight32);
 
+#ifndef CONFIG_SPASM_KERNEL_HWEIGHT16_SPASM
 unsigned int __sw_hweight16(unsigned int w)
 {
 	unsigned int res = w - ((w >> 1) & 0x5555);
@@ -34,15 +44,22 @@ unsigned int __sw_hweight16(unsigned int w)
 	res = (res + (res >> 4)) & 0x0F0F;
 	return (res + (res >> 8)) & 0x00FF;
 }
+#endif
+#if !defined(CONFIG_SPASM_KERNEL_HWEIGHT16_SPASM)
 EXPORT_SYMBOL(__sw_hweight16);
+#endif
 
+#ifndef CONFIG_SPASM_KERNEL_HWEIGHT8_SPASM
 unsigned int __sw_hweight8(unsigned int w)
 {
 	unsigned int res = w - ((w >> 1) & 0x55);
 	res = (res & 0x33) + ((res >> 2) & 0x33);
 	return (res + (res >> 4)) & 0x0F;
 }
+#endif
+#if !defined(CONFIG_SPASM_KERNEL_HWEIGHT8_SPASM)
 EXPORT_SYMBOL(__sw_hweight8);
+#endif
 
 unsigned long __sw_hweight64(__u64 w)
 {

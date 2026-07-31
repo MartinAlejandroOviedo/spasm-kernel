@@ -66,6 +66,10 @@ obj-$(CONFIG_SPASM_KERNEL_BCD_DUAL) += bcd.o bcd2bin_spasm.o bcd2bin_dual.o bin2
 
 obj-$(CONFIG_SPASM_KERNEL_HEX_TO_BIN_SPASM) += hex_to_bin_spasm.o hex_to_bin_spasm_entry.o hex_to_bin_export.o
 obj-$(CONFIG_SPASM_KERNEL_CARE_POLICY) += spasm_care_policy.o
+obj-$(CONFIG_SPASM_KERNEL_HWEIGHT8_SPASM) += hweight8_spasm.o hweight8_spasm_entry.o hweight8_export.o
+obj-$(CONFIG_SPASM_KERNEL_HWEIGHT8_DUAL) += hweight8_spasm.o hweight8_dual.o
+obj-$(CONFIG_SPASM_KERNEL_HWEIGHT16_SPASM) += hweight16_spasm.o hweight16_spasm_entry.o hweight16_export.o
+obj-$(CONFIG_SPASM_KERNEL_HWEIGHT16_DUAL) += hweight16_spasm.o hweight16_dual.o
 obj-$(CONFIG_TEST_HEXDUMP) += test_hexdump.o
 obj-y += kstrtox.o
 obj-$(CONFIG_FIND_BIT_BENCHMARK) += find_bit_benchmark.o

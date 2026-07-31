@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// Hamming weight for 16-bit values — SpASM implementation.
+
+export fn spasm_hweight16(w: u32) -> u32 {
+    var res: u32 = w;
+    var t: u32 = res >> 1;
+    t = t & 21845;
+    res = res - t;
+    t = res >> 2;
+    t = t & 13107;
+    res = res & 13107;
+    res = res + t;
+    t = res >> 4;
+    res = res + t;
+    res = res & 3855;
+    t = res >> 8;
+    res = res + t;
+    res = res & 255;
+    return res;
+}
