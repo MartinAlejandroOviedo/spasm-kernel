@@ -54,13 +54,21 @@ EXPORT_SYMBOL(crc_ccitt_table);
  *	@buffer: data pointer
  *	@len: number of bytes in the buffer
  */
+#ifdef CONFIG_SPASM_KERNEL_CRC_CCITT_SPASM
+u16 __attribute__((weak)) crc_ccitt(
+#elif defined(CONFIG_SPASM_KERNEL_CRC_CCITT_DUAL)
+#define crc_ccitt spasm_crc_ccitt_c
+u16 crc_ccitt(
+#else
 u16 crc_ccitt(u16 crc, u8 const *buffer, size_t len)
 {
 	while (len--)
 		crc = crc_ccitt_byte(crc, *buffer++);
 	return crc;
 }
+#if !defined(CONFIG_SPASM_KERNEL_CRC_CCITT_SPASM) && !defined(CONFIG_SPASM_KERNEL_CRC_CCITT_DUAL)
 EXPORT_SYMBOL(crc_ccitt);
+#endif
 
 MODULE_DESCRIPTION("CRC-CCITT calculations");
 MODULE_LICENSE("GPL");

@@ -61,13 +61,21 @@ static const u8 crc7_be_syndrome_table[256] = {
  * makes the computation easier, and all callers want it in that form.
  *
  */
+#ifdef CONFIG_SPASM_KERNEL_CRC7_BE_SPASM
+u8 __attribute__((weak)) crc7_be(
+#elif defined(CONFIG_SPASM_KERNEL_CRC7_BE_DUAL)
+#define crc7_be spasm_crc7_be_c
+u8 crc7_be(
+#else
 u8 crc7_be(u8 crc, const u8 *buffer, size_t len)
 {
 	while (len--)
 		crc = crc7_be_syndrome_table[crc ^ *buffer++];
 	return crc;
 }
+#if !defined(CONFIG_SPASM_KERNEL_CRC7_BE_SPASM) && !defined(CONFIG_SPASM_KERNEL_CRC7_BE_DUAL)
 EXPORT_SYMBOL(crc7_be);
+#endif
 
 MODULE_DESCRIPTION("CRC7 calculations");
 MODULE_LICENSE("GPL");
