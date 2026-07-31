@@ -34,8 +34,17 @@
  * for the best explanations of this ordering.
  */
 
+#ifdef CONFIG_SPASM_KERNEL_BITMAP_EQUAL_SPASM
+bool __attribute__((weak)) __bitmap_equal(const unsigned long *bitmap1,
+		    const unsigned long *bitmap2, unsigned int bits)
+#elif defined(CONFIG_SPASM_KERNEL_BITMAP_EQUAL_DUAL)
+#define __bitmap_equal spasm_bitmap_equal_c
 bool __bitmap_equal(const unsigned long *bitmap1,
 		    const unsigned long *bitmap2, unsigned int bits)
+#else
+bool __bitmap_equal(const unsigned long *bitmap1,
+		    const unsigned long *bitmap2, unsigned int bits)
+#endif
 {
 	unsigned int k, lim = bits/BITS_PER_LONG;
 	for (k = 0; k < lim; ++k)
@@ -48,7 +57,9 @@ bool __bitmap_equal(const unsigned long *bitmap1,
 
 	return true;
 }
+#if !defined(CONFIG_SPASM_KERNEL_BITMAP_EQUAL_SPASM) && !defined(CONFIG_SPASM_KERNEL_BITMAP_EQUAL_DUAL)
 EXPORT_SYMBOL(__bitmap_equal);
+#endif
 
 bool __bitmap_or_equal(const unsigned long *bitmap1,
 		       const unsigned long *bitmap2,
@@ -292,8 +303,17 @@ void __bitmap_replace(unsigned long *dst,
 }
 EXPORT_SYMBOL(__bitmap_replace);
 
+#ifdef CONFIG_SPASM_KERNEL_BITMAP_INTERSECTS_SPASM
+bool __attribute__((weak)) __bitmap_intersects(const unsigned long *bitmap1,
+			 const unsigned long *bitmap2, unsigned int bits)
+#elif defined(CONFIG_SPASM_KERNEL_BITMAP_INTERSECTS_DUAL)
+#define __bitmap_intersects spasm_bitmap_intersects_c
 bool __bitmap_intersects(const unsigned long *bitmap1,
 			 const unsigned long *bitmap2, unsigned int bits)
+#else
+bool __bitmap_intersects(const unsigned long *bitmap1,
+			 const unsigned long *bitmap2, unsigned int bits)
+#endif
 {
 	unsigned int k, lim = bits/BITS_PER_LONG;
 	for (k = 0; k < lim; ++k)
@@ -305,7 +325,9 @@ bool __bitmap_intersects(const unsigned long *bitmap1,
 			return true;
 	return false;
 }
+#if !defined(CONFIG_SPASM_KERNEL_BITMAP_INTERSECTS_SPASM) && !defined(CONFIG_SPASM_KERNEL_BITMAP_INTERSECTS_DUAL)
 EXPORT_SYMBOL(__bitmap_intersects);
+#endif
 
 bool __bitmap_subset(const unsigned long *bitmap1,
 		     const unsigned long *bitmap2, unsigned int bits)
@@ -335,11 +357,20 @@ EXPORT_SYMBOL(__bitmap_subset);
 	w;									\
 })
 
+#ifdef CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_SPASM
+unsigned int __attribute__((weak)) __bitmap_weight(const unsigned long *bitmap, unsigned int bits)
+#elif defined(CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_DUAL)
+#define __bitmap_weight spasm_bitmap_weight_c
 unsigned int __bitmap_weight(const unsigned long *bitmap, unsigned int bits)
+#else
+unsigned int __bitmap_weight(const unsigned long *bitmap, unsigned int bits)
+#endif
 {
 	return BITMAP_WEIGHT(bitmap[idx], bits);
 }
+#if !defined(CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_SPASM) && !defined(CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_DUAL)
 EXPORT_SYMBOL(__bitmap_weight);
+#endif
 
 unsigned int __bitmap_weight_and(const unsigned long *bitmap1,
 				const unsigned long *bitmap2, unsigned int bits)
