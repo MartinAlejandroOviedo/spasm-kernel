@@ -33,7 +33,8 @@ VAR_RE = re.compile(
 )
 TYPED_VAR_RE = re.compile(
     r"(var|let)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
-    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?(?:\[[0-9]+\])?\??)"
+    r"((?:[A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?(?:\[[0-9]+\])?\??)|"
+    r"(?:fn\s*\([^()]*\)\s*->\s*[A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??))"
     r"\s*=\s*([^;{}]+)\s*;"
 )
 ASSIGN_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;{}]+)\s*;")
@@ -91,7 +92,7 @@ CALL_RE = re.compile(
     r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)\s*$"
 )
 FUNCTION_HEAD_RE = re.compile(
-    r"\b(?:(export)\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)\s*"
+    r"\b(?:(export)\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.+)\)\s*"
     r"->\s*([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)"
     r"\s*\{"
 )
@@ -101,7 +102,8 @@ EXTERN_FUNCTION_RE = re.compile(
 )
 PARAM_RE = re.compile(
     r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
-    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)\s*$"
+    r"((?:[A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)|"
+    r"(?:fn\s*\([^()]*\)\s*->\s*[A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??))\s*$"
 )
 POINTER_TYPE_RE = re.compile(
     r"^ptr<([A-Za-z_][A-Za-z0-9_]*)>(\?)?$"
@@ -150,6 +152,15 @@ KERNEL_EXTERN_ALLOWLIST = {
 
 STRUCT_LAYOUTS = {}
 
+FN_TYPE_RE = re.compile(
+    r"^fn\s*\(([^()]*)\)\s*->\s*"
+    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)\s*$"
+)
+
+INTERNAL_FN_RE = re.compile(
+    r"^\s*(spasm_fn_[A-Za-z_][A-Za-z0-9_]*)\s*$"
+)
+
 ENUM_HEAD_RE = re.compile(
     r"\benum\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{"
 )
@@ -167,6 +178,24 @@ def parse_array_type(type_name):
     if not match:
         return None, None
     return match.group(1), int(match.group(2))
+
+
+def is_fn_type(type_name):
+    return FN_TYPE_RE.match(type_name) is not None
+
+
+def fn_type_info(type_name):
+    match = FN_TYPE_RE.match(type_name)
+    if not match:
+        return None
+    params_text, return_type = match.groups()
+    params = []
+    if params_text.strip():
+        for raw in params_text.split(","):
+            raw = raw.strip()
+            if raw:
+                params.append(raw)
+    return tuple(params), return_type
 
 
 def extract_enums(source):
@@ -235,6 +264,8 @@ def compute_struct_layout(name, fields):
 
 
 def type_size_and_align(type_name):
+    if is_fn_type(type_name):
+        return 8, 8
     inner_type, count = parse_array_type(type_name)
     if inner_type is not None:
         elem_width, elem_align = type_size_and_align(inner_type)
@@ -612,6 +643,8 @@ def pointer_type(type_name):
 
 
 def is_supported_type(type_name):
+    if is_fn_type(type_name):
+        return True
     inner_type, _count = parse_array_type(type_name)
     if inner_type is not None:
         return is_supported_type(inner_type)
@@ -669,7 +702,7 @@ def validate_memory_access(
     return offset
 
 
-def parse_operand(value, variables):
+def parse_operand(value, variables, functions=None):
     value = value.strip()
     if value.lstrip("-").isdigit():
         return ("imm", int(value))
@@ -677,6 +710,8 @@ def parse_operand(value, variables):
         return ("imm", ENUM_VALUES[value][0])
     if value in ERRNOS:
         return ("imm", ERRNOS[value])
+    if functions and value in functions and not functions[value].get("external"):
+        return ("fn_ref", value)
     if value not in variables:
         raise CompileError(f"variable no declarada: {value}")
     return ("var", value)
@@ -694,6 +729,8 @@ def parse_expression(value, variables):
 
 
 def validate_immediate(value, type_name):
+    if is_fn_type(type_name):
+        return
     if is_pointer_type(type_name):
         if value == 0 and is_nullable_pointer(type_name):
             return
@@ -714,6 +751,10 @@ def validate_immediate(value, type_name):
 def validate_expression_type(expression, variable_types, expected_type):
     if is_pointer_type(expected_type) and len(expression) != 1:
         raise CompileError("aritmetica de punteros no permitida")
+    if is_fn_type(expected_type):
+        if len(expression) != 1:
+            raise CompileError("expresion invalida para tipo fn")
+        return expected_type
     inner_type, _count = parse_array_type(expected_type)
     if inner_type is not None and is_struct_type(inner_type):
         if len(expression) == 1 and expression[0][0] == "imm":
@@ -832,12 +873,46 @@ def parse_value_expression(value, variables, functions, expected_type):
         return ("load", resource_name, offset_text, load_type)
     call_match = CALL_RE.match(value)
     if not call_match:
+        if is_fn_type(expected_type):
+            fn_name = value.strip()
+            func = functions.get(fn_name)
+            if func and not func.get("external"):
+                return ("fn_ref", fn_name)
+            if func:
+                raise CompileError(
+                    f"no se puede obtener referencia a funcion externa: {fn_name}"
+                )
         expression = parse_expression(value, variables)
         validate_expression_type(expression, variables, expected_type)
         return expression
     function_name, args_text = call_match.groups()
     function = functions.get(function_name)
     if function is None:
+        if function_name in variables and is_fn_type(variables[function_name]):
+            fn_params, fn_ret = fn_type_info(variables[function_name])
+            if fn_ret != expected_type:
+                raise CompileError(
+                    f"retorno de {function_name} es {fn_ret}, "
+                    f"se esperaba {expected_type}"
+                )
+            raw_args = [] if not args_text.strip() else args_text.split(",")
+            if len(raw_args) != len(fn_params):
+                raise CompileError(
+                    f"funcion {function_name}: se esperaban "
+                    f"{len(fn_params)} argumentos, se recibieron {len(raw_args)}"
+                )
+            args = []
+            for raw_arg, param_type in zip(raw_args, fn_params):
+                operand = parse_operand(raw_arg.strip(), variables)
+                if operand[0] == "imm":
+                    validate_immediate(operand[1], param_type)
+                elif variables.get(operand[1]) != param_type:
+                    raise CompileError(
+                        f"argumento {operand[1]} es {variables.get(operand[1])}, "
+                        f"se esperaba {param_type}"
+                    )
+                args.append(operand)
+            return ("indirect_call", function_name, tuple(args), fn_ret, fn_params)
         raise CompileError(f"funcion no declarada: {function_name}")
     if function["return_type"] != expected_type:
         raise CompileError(
@@ -854,9 +929,11 @@ def parse_value_expression(value, variables, functions, expected_type):
     for raw_arg, (_param_name, param_type) in zip(
         raw_args, function["params"]
     ):
-        operand = parse_operand(raw_arg.strip(), variables)
+        operand = parse_operand(raw_arg.strip(), variables, functions)
         if operand[0] == "imm":
             validate_immediate(operand[1], param_type)
+        elif operand[0] == "fn_ref":
+            pass
         elif variables[operand[1]] != param_type:
             raise CompileError(
                 f"argumento {operand[1]} es {variables[operand[1]]}, "
@@ -1341,6 +1418,8 @@ def emit_load_operand(lines, operand, slots, register):
     operand_kind, value = operand
     if operand_kind == "imm":
         lines.append(f"\tmovq ${value}, %{register}")
+    elif operand_kind == "fn_ref":
+        lines.append(f"\tleaq {value}(%rip), %{register}")
     else:
         lines.append(f"\tmovq {slots[value]}(%rbp), %{register}")
 
@@ -1559,6 +1638,16 @@ def emit_expression(
             emit_load_operand(lines, operand, slots, register)
         symbol = function_name if external else f"spasm_fn_{function_name}"
         lines.append(f"\tcall {symbol}")
+        return
+    if expression[0] == "indirect_call":
+        _kind, var_name, arguments, _return_type, _fn_params = expression
+        for operand, register in zip(arguments, ARG_REGISTERS):
+            emit_load_operand(lines, operand, slots, register)
+        lines.append(f"\tmovq {slots[var_name]}(%rbp), %rax")
+        lines.append("\tcall *%rax")
+        return
+    if expression[0] == "fn_ref":
+        lines.append(f"\tleaq {expression[1]}(%rip), %rax")
         return
     emit_load_operand(lines, expression[0], slots, "rax")
     if len(expression) == 3:
