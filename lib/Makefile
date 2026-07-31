@@ -355,3 +355,5 @@ obj-$(CONFIG_SPASM_KERNEL_KSTRTOBOOL_SPASM) += kstrtobool_spasm.o kstrtobool_spa
 obj-$(CONFIG_SPASM_KERNEL_KSTRTOBOOL_DUAL) += kstrtobool_spasm.o kstrtobool_dual.o
 obj-$(CONFIG_SPASM_KERNEL_HEX2BIN_SPASM) += hex2bin_spasm.o hex2bin_spasm_entry.o hex2bin_export.o
 obj-$(CONFIG_SPASM_KERNEL_HEX2BIN_DUAL) += hex2bin_spasm.o hex2bin_dual.o
+obj-$(CONFIG_SPASM_KERNEL_CRC16_SPASM) += crc16_spasm.o crc16_spasm_entry.o crc16_export.o
+obj-$(CONFIG_SPASM_KERNEL_CRC16_DUAL) += crc16_spasm.o crc16_dual.o

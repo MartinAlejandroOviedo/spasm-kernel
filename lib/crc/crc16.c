@@ -52,13 +52,22 @@ static const u16 crc16_table[256] = {
  *
  * Returns the updated CRC value.
  */
+#ifdef CONFIG_SPASM_KERNEL_CRC16_SPASM
+u16 __attribute__((weak)) crc16(u16 crc, const u8 *p, size_t len)
+#elif defined(CONFIG_SPASM_KERNEL_CRC16_DUAL)
+#define crc16 spasm_crc16_c
 u16 crc16(u16 crc, const u8 *p, size_t len)
+#else
+u16 crc16(u16 crc, const u8 *p, size_t len)
+#endif
 {
 	while (len--)
 		crc = (crc >> 8) ^ crc16_table[(crc & 0xff) ^ *p++];
 	return crc;
 }
+#if !defined(CONFIG_SPASM_KERNEL_CRC16_SPASM) && !defined(CONFIG_SPASM_KERNEL_CRC16_DUAL)
 EXPORT_SYMBOL(crc16);
+#endif
 
 MODULE_DESCRIPTION("CRC16 calculations");
 MODULE_LICENSE("GPL");

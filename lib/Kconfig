@@ -849,3 +849,21 @@ config SPASM_KERNEL_HEX2BIN_DUAL
 	bool "Dual C/SpASM comparison"
 
 endchoice
+
+choice
+	prompt "spasm-kernel crc16 implementation"
+	default SPASM_KERNEL_CRC16_SPASM if SPASM_KERNEL_MODE_SPASM
+	default SPASM_KERNEL_CRC16_DUAL if SPASM_KERNEL_MODE_DUAL
+	default SPASM_KERNEL_CRC16_C
+	depends on X86_64
+
+config SPASM_KERNEL_CRC16_C
+	bool "Original Linux C implementation"
+
+config SPASM_KERNEL_CRC16_SPASM
+	bool "SpASM implementation"
+
+config SPASM_KERNEL_CRC16_DUAL
+	bool "Dual C/SpASM comparison"
+
+endchoice

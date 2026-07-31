@@ -64,6 +64,13 @@ ERRNOS.update({
     "EFAULT": -14,
 })
 ENUM_VALUES = {}
+STATIC_DATA = {}
+
+STATIC_RE = re.compile(
+    r"\bstatic\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
+    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?)\s*"
+    r"\[([0-9]+)\]\s*=\s*\{([^}]*)\}\s*;"
+)
 INTEGER_TYPES = {
     "u8": (0, 2**8 - 1),
     "i8": (-(2**7), 2**7 - 1),
@@ -257,6 +264,39 @@ def extract_enums(source):
     return dict(enum_entries), "".join(remaining)
 
 
+def extract_static_data(source):
+    entries = {}
+    spans = []
+    position = 0
+    while True:
+        match = STATIC_RE.search(source, position)
+        if not match:
+            break
+        name, elem_type, count_text, values_text = match.groups()
+        if name in entries:
+            raise CompileError(f"dato estatico duplicado: {name}")
+        if not is_supported_type(elem_type):
+            raise CompileError(f"tipo no soportado en static {name}: {elem_type}")
+        raw_values = [v.strip() for v in values_text.split(",") if v.strip()]
+        count = int(count_text)
+        values = []
+        for raw in raw_values:
+            if raw.startswith("0x") or raw.startswith("0X"):
+                values.append(int(raw, 16))
+            elif raw.lstrip("-").isdigit():
+                values.append(int(raw))
+            else:
+                raise CompileError(f"valor invalido en static {name}: {raw}")
+        entries[name] = (elem_type, count, values)
+        spans.append((match.start(), match.end()))
+        position = match.end()
+    remaining = list(source)
+    for start, end in spans:
+        remaining[start:end] = " " * (end - start)
+    STATIC_DATA.update(entries)
+    return entries, "".join(remaining)
+
+
 def compute_struct_layout(name, fields):
     offset = 0
     max_align = 1
@@ -380,7 +420,9 @@ def parse_source(source, kind="module"):
     metadata = {}
     STRUCT_LAYOUTS.clear()
     ENUM_VALUES.clear()
+    STATIC_DATA.clear()
     block_texts, source_without_blocks = extract_on_blocks(source)
+    static_entries, source_without_blocks = extract_static_data(source_without_blocks)
     enums, source_without_blocks = extract_enums(source_without_blocks)
     structs, source_without_blocks = extract_structs(source_without_blocks)
     functions, source_without_blocks = extract_functions(source_without_blocks)
@@ -726,6 +768,8 @@ def parse_operand(value, variables, functions=None):
         return ("imm", ENUM_VALUES[value][0])
     if value in ERRNOS:
         return ("imm", ERRNOS[value])
+    if value in STATIC_DATA:
+        return ("static_ref", value)
     if functions and value in functions and not functions[value].get("external"):
         return ("fn_ref", value)
     if value not in variables:
@@ -796,9 +840,17 @@ def validate_expression_type(expression, variable_types, expected_type):
         expected_type = inner_type
     for operand in expression[::2]:
         kind, value = operand
+        if kind in ("fn_ref", "static_ref"):
+            continue
         if kind == "imm":
             validate_immediate(value, expected_type)
         elif variable_types[value] != expected_type:
+            actual = variable_types[value]
+            if actual in INTEGER_TYPES and expected_type in INTEGER_TYPES:
+                actual_w = TYPE_WIDTHS.get(actual, 0)
+                expected_w = TYPE_WIDTHS.get(expected_type, 0)
+                if actual_w <= expected_w:
+                    continue
             raise CompileError(
                 f"tipo incompatible: {value} es {variable_types[value]}, "
                 f"se esperaba {expected_type}"
@@ -882,11 +934,12 @@ def parse_value_expression(value, variables, functions, expected_type):
     ptr_match = PTR_OP_RE.match(value)
     if ptr_match:
         op, ptr_type, ptr_name, arg_text = ptr_match.groups()
-        if ptr_name not in variables:
+        if ptr_name not in variables and ptr_name not in STATIC_DATA:
             raise CompileError(f"variable no declarada: {ptr_name}")
-        var_type = variables[ptr_name]
-        if not is_pointer_type(var_type) and not is_nullable_pointer(var_type):
-            raise CompileError(f"{ptr_name} no es un puntero (es {var_type})")
+        if ptr_name in variables:
+            var_type = variables[ptr_name]
+            if not is_pointer_type(var_type) and not is_nullable_pointer(var_type):
+                raise CompileError(f"{ptr_name} no es un puntero (es {var_type})")
         if op != "ptr_offset" and ptr_type != expected_type:
             raise CompileError(
                 f"{op}<{ptr_type}> retorna {ptr_type}, se esperaba {expected_type}"
@@ -1306,9 +1359,9 @@ def parse_statements(
                 statements.append(("barrier", values[0]))
             elif statement_kind == "ptr_op":
                 op, ptr_type, ptr_name, arg_text = values[:4]
-                if ptr_name not in variables:
+                if ptr_name not in variables and ptr_name not in STATIC_DATA:
                     raise CompileError(f"variable no declarada: {ptr_name}")
-                if not is_pointer_type(variables[ptr_name]) and not is_nullable_pointer(variables[ptr_name]):
+                if ptr_name in variables and not is_pointer_type(variables[ptr_name]) and not is_nullable_pointer(variables[ptr_name]):
                     raise CompileError(f"{ptr_name} no es un puntero")
                 if op != "ptr_store":
                     raise CompileError(f"{op} solo valido en expresion, no como sentencia")
@@ -1487,6 +1540,8 @@ def emit_load_operand(lines, operand, slots, register):
     if operand_kind == "imm":
         lines.append(f"\tmovq ${value}, %{register}")
     elif operand_kind == "fn_ref":
+        lines.append(f"\tleaq {value}(%rip), %{register}")
+    elif operand_kind == "static_ref":
         lines.append(f"\tleaq {value}(%rip), %{register}")
     else:
         lines.append(f"\tmovq {slots[value]}(%rbp), %{register}")
@@ -1709,7 +1764,10 @@ def emit_expression(
         return
     if expression[0] == "ptr_op":
         _kind, op, ptr_name, ptr_type, arg = expression
-        lines.append(f"\tmovq {slots[ptr_name]}(%rbp), %rax")
+        if ptr_name in STATIC_DATA:
+            lines.append(f"\tleaq {ptr_name}(%rip), %rax")
+        else:
+            lines.append(f"\tmovq {slots[ptr_name]}(%rbp), %rax")
         if op == "ptr_load":
             width = type_size_and_align(ptr_type)[0]
             instr = {1: "movzbq", 2: "movzwq", 4: "movl", 8: "movq"}.get(width, "movq")
@@ -2169,7 +2227,10 @@ def emit_function(
                 lines.append("\t# compiler barrier")
         elif statement_kind == "ptr_store_stmt":
             ptr_name, ptr_type, arg = statement[1:]
-            lines.append(f"\tmovq {slots[ptr_name]}(%rbp), %rax")
+            if ptr_name in STATIC_DATA:
+                lines.append(f"\tleaq {ptr_name}(%rip), %rax")
+            else:
+                lines.append(f"\tmovq {slots[ptr_name]}(%rbp), %rax")
             emit_load_operand(lines, arg, slots, "rcx")
             width = type_size_and_align(ptr_type)[0]
             instr = {1: "movb", 2: "movw", 4: "movl", 8: "movq"}.get(width, "movq")
@@ -2262,6 +2323,21 @@ def emit_assembly(metadata, blocks, functions, kind="module"):
     ]
     for function in functions:
         emit_native_function(lines, function, builtin=kind == "builtin")
+    if STATIC_DATA:
+        lines.extend(['.section .rodata,"a"', ""])
+        for name, (elem_type, count, values) in STATIC_DATA.items():
+            width = type_size_and_align(elem_type)[0]
+            directive = {1: ".byte", 2: ".value", 4: ".long", 8: ".quad"}.get(width, ".byte")
+            lines.append(f".globl {name}")
+            lines.append(f".type {name}, @object")
+            lines.append(f".size {name}, {width * count}")
+            lines.append(f"{name}:")
+            for v in values[:count]:
+                lines.append(f"\t{directive} {v}")
+            remaining = count - len(values)
+            if remaining > 0:
+                lines.append(f"\t.zero {remaining * width}")
+            lines.append("")
     if kind == "builtin":
         lines.extend(
             [
