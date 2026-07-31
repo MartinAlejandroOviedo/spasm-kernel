@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// hex2bin — convert hex string to binary bytes.
+
+fn hex_val(c: u8) -> u8 {
+    if (c >= 48) {
+        if (c <= 57) {
+            return c - 48;
+        }
+    }
+    if (c >= 97) {
+        if (c <= 102) {
+            return c - 87;
+        }
+    }
+    if (c >= 65) {
+        if (c <= 70) {
+            return c - 55;
+        }
+    }
+    return 255;
+}
+
+export fn spasm_hex2bin(dst: ptr<u8>, src: ptr<u8>?, count: usize) -> i32 {
+    var hi: u8 = 0;
+    var lo: u8 = 0;
+    var c: u8 = 0;
+    var val: u8 = 0;
+    var loop: u8 = 1;
+    var cnt: usize = count;
+    while (loop == 1) {
+        if (cnt == 0) {
+            loop = 0;
+        } else {
+            c = ptr_load<u8>(src);
+            hi = hex_val(c);
+            if (hi == 255) {
+                return -22;
+            }
+            src = ptr_offset<u8>(src, 1);
+            c = ptr_load<u8>(src);
+            lo = hex_val(c);
+            if (lo == 255) {
+                return -22;
+            }
+            src = ptr_offset<u8>(src, 1);
+            val = hi << 4;
+            val = val | lo;
+            ptr_store<u8>(dst, val);
+            dst = ptr_offset<u8>(dst, 1);
+            cnt = cnt - 1;
+        }
+    }
+    return 0;
+}

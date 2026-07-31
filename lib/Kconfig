@@ -831,3 +831,21 @@ config SPASM_KERNEL_KSTRTOBOOL_DUAL
 	bool "Dual C/SpASM comparison"
 
 endchoice
+
+choice
+	prompt "spasm-kernel hex2bin implementation"
+	default SPASM_KERNEL_HEX2BIN_SPASM if SPASM_KERNEL_MODE_SPASM
+	default SPASM_KERNEL_HEX2BIN_DUAL if SPASM_KERNEL_MODE_DUAL
+	default SPASM_KERNEL_HEX2BIN_C
+	depends on X86_64
+
+config SPASM_KERNEL_HEX2BIN_C
+	bool "Original Linux C implementation"
+
+config SPASM_KERNEL_HEX2BIN_SPASM
+	bool "SpASM implementation"
+
+config SPASM_KERNEL_HEX2BIN_DUAL
+	bool "Dual C/SpASM comparison"
+
+endchoice

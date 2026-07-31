@@ -66,7 +66,14 @@ EXPORT_SYMBOL(hex_to_bin);
  *
  * Return 0 on success, -EINVAL in case of bad input.
  */
+#ifdef CONFIG_SPASM_KERNEL_HEX2BIN_SPASM
+int __attribute__((weak)) hex2bin(u8 *dst, const char *src, size_t count)
+#elif defined(CONFIG_SPASM_KERNEL_HEX2BIN_DUAL)
+#define hex2bin spasm_hex2bin_c
 int hex2bin(u8 *dst, const char *src, size_t count)
+#else
+int hex2bin(u8 *dst, const char *src, size_t count)
+#endif
 {
 	while (count--) {
 		int hi, lo;
@@ -82,7 +89,9 @@ int hex2bin(u8 *dst, const char *src, size_t count)
 	}
 	return 0;
 }
+#if !defined(CONFIG_SPASM_KERNEL_HEX2BIN_SPASM) && !defined(CONFIG_SPASM_KERNEL_HEX2BIN_DUAL)
 EXPORT_SYMBOL(hex2bin);
+#endif
 
 /**
  * bin2hex - convert binary data to an ascii hexadecimal string

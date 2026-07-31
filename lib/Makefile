@@ -353,3 +353,5 @@ obj-$(CONFIG_SPASM_KERNEL_SKIP_SPACES_SPASM) += skip_spaces_spasm.o skip_spaces_
 obj-$(CONFIG_SPASM_KERNEL_SKIP_SPACES_DUAL) += skip_spaces_spasm.o skip_spaces_dual.o
 obj-$(CONFIG_SPASM_KERNEL_KSTRTOBOOL_SPASM) += kstrtobool_spasm.o kstrtobool_spasm_entry.o kstrtobool_export.o
 obj-$(CONFIG_SPASM_KERNEL_KSTRTOBOOL_DUAL) += kstrtobool_spasm.o kstrtobool_dual.o
+obj-$(CONFIG_SPASM_KERNEL_HEX2BIN_SPASM) += hex2bin_spasm.o hex2bin_spasm_entry.o hex2bin_export.o
+obj-$(CONFIG_SPASM_KERNEL_HEX2BIN_DUAL) += hex2bin_spasm.o hex2bin_dual.o
