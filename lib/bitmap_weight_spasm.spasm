@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// __bitmap_weight — count set bits in bitmap, word by word.
+
+fn hweight64(w: usize) -> usize {
+    var t: usize = w >> 1;
+    t = t & 6148914691236517205;
+    var res: usize = w - t;
+    t = res & 3689348814741910323;
+    res = res >> 2;
+    res = res & 3689348814741910323;
+    res = res + t;
+    t = res >> 4;
+    res = res + t;
+    res = res & 1085102592571150095;
+    t = res >> 8;
+    res = res + t;
+    t = res >> 16;
+    res = res + t;
+    t = res >> 32;
+    res = res + t;
+    res = res & 127;
+    return res;
+}
+
+export fn spasm_bitmap_weight(bitmap: ptr<usize>?, bits: usize) -> usize {
+    var w: usize = 0;
+    var lim: usize = bits >> 6;
+    var k: usize = 0;
+    var val: usize = 0;
+    var loop: u8 = 1;
+    while (loop == 1) {
+        if (k == lim) {
+            loop = 0;
+        } else {
+            val = ptr_load<usize>(bitmap);
+            val = hweight64(val);
+            w = w + val;
+            bitmap = ptr_offset<usize>(bitmap, 8);
+            k = k + 1;
+        }
+    }
+    return w;
+}
