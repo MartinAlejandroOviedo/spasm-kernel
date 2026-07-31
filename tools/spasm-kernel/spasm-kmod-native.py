@@ -33,10 +33,16 @@ VAR_RE = re.compile(
 )
 TYPED_VAR_RE = re.compile(
     r"(var|let)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
-    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)"
+    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?(?:\[[0-9]+\])?\??)"
     r"\s*=\s*([^;{}]+)\s*;"
 )
 ASSIGN_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;{}]+)\s*;")
+ARRAY_ASSIGN_RE = re.compile(
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*)\s*\]\s*=\s*([^;{}]+)\s*;"
+)
+ARRAY_ACCESS_RE = re.compile(
+    r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*)\s*\]\s*$"
+)
 FIELD_ASSIGN_RE = re.compile(
     r"([A-Za-z_][A-Za-z0-9_]*)((?:\s*\.\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*=\s*([^;{}]+)\s*;"
 )
@@ -708,6 +714,17 @@ def validate_immediate(value, type_name):
 def validate_expression_type(expression, variable_types, expected_type):
     if is_pointer_type(expected_type) and len(expression) != 1:
         raise CompileError("aritmetica de punteros no permitida")
+    inner_type, _count = parse_array_type(expected_type)
+    if inner_type is not None and is_struct_type(inner_type):
+        if len(expression) == 1 and expression[0][0] == "imm":
+            if expression[0][1] == 0:
+                return expected_type
+            raise CompileError(
+                f"solo 0 es valido para inicializar array de struct {expected_type}"
+            )
+        raise CompileError(
+            f"array de struct {expected_type} solo admite inicializacion con 0"
+        )
     if is_struct_type(expected_type):
         if len(expression) == 1 and expression[0][0] == "imm":
             if expression[0][1] == 0:
@@ -718,6 +735,8 @@ def validate_expression_type(expression, variable_types, expected_type):
         raise CompileError(
             f"struct {expected_type} solo admite inicializacion con 0"
         )
+    if inner_type is not None:
+        expected_type = inner_type
     for operand in expression[::2]:
         kind, value = operand
         if kind == "imm":
@@ -786,6 +805,23 @@ def parse_value_expression(value, variables, functions, expected_type):
                 f"se esperaba {expected_type}"
             )
         return ("field_access", base_name, [field_name], field_type, total_offset)
+    arr_match = ARRAY_ACCESS_RE.match(value)
+    if arr_match:
+        base_name, index_text = arr_match.groups()
+        if base_name not in variables:
+            raise CompileError(f"variable no declarada: {base_name}")
+        var_type = variables[base_name]
+        inner_type, count = parse_array_type(var_type)
+        if inner_type is None:
+            raise CompileError(f"{base_name} no es un array (es {var_type})")
+        index = parse_operand(index_text, variables)
+        if inner_type != expected_type:
+            raise CompileError(
+                f"elemento de {base_name} es {inner_type}, "
+                f"se esperaba {expected_type}"
+            )
+        elem_width = type_size_and_align(inner_type)[0]
+        return ("array_access", base_name, index, inner_type, count, elem_width)
     load_match = LOAD_RE.match(value)
     if load_match:
         load_type, resource_name, offset_text = load_match.groups()
@@ -889,6 +925,7 @@ def parse_statements(
         ("use", USE_RE),
         ("free", FREE_RE),
         ("store", STORE_RE),
+        ("array_assign", ARRAY_ASSIGN_RE),
         ("return", RETURN_RE),
         ("typed_var", TYPED_VAR_RE),
         ("var", VAR_RE),
@@ -1101,6 +1138,39 @@ def parse_statements(
                     statement = list(statements[-1])
                     statement[2] = replacement
                     statements[-1] = tuple(statement)
+            elif statement_kind == "array_assign":
+                base_name, index_text, expression_text = values
+                if base_name not in variables:
+                    raise CompileError(f"variable no declarada: {base_name}")
+                var_type = variables[base_name]
+                inner_type, count = parse_array_type(var_type)
+                if inner_type is None:
+                    raise CompileError(f"{base_name} no es un array (es {var_type})")
+                index = parse_operand(index_text, variables)
+                if index[0] == "imm":
+                    if index[1] < 0 or index[1] >= count:
+                        raise CompileError(
+                            f"indice {index[1]} fuera de rango para {base_name}[{count}]"
+                        )
+                elif variables.get(index[1]) != "usize":
+                    raise CompileError(
+                        f"indice de array debe ser usize, no {variables.get(index[1])}"
+                    )
+                elem_width = type_size_and_align(inner_type)[0]
+                expression = parse_value_expression(
+                    expression_text, variables, functions, inner_type
+                )
+                statements.append(
+                    (
+                        "store_array",
+                        base_name,
+                        index,
+                        inner_type,
+                        count,
+                        elem_width,
+                        expression,
+                    )
+                )
             elif statement_kind == "field_assign":
                 base_name, dot_chain, expression_text = values
                 if base_name not in variables:
@@ -1425,6 +1495,63 @@ def emit_expression(
             lines.append(
                 f"\t{instruction} {base_slot + field_offset}(%rbp), %rax"
             )
+        return
+    if expression[0] == "array_access":
+        _kind, base_name, index, elem_type, _count, elem_width = expression
+        base_slot = slots[base_name]
+        if index[0] == "imm":
+            offset = base_slot + index[1] * elem_width
+            instruction = {
+                "u8": "movzbq",
+                "bool": "movzbq",
+                "i8": "movsbq",
+                "u16": "movzwq",
+                "i16": "movswq",
+                "u32": "movl",
+                "i32": "movslq",
+                "u64": "movq",
+                "i64": "movq",
+                "usize": "movq",
+                "isize": "movq",
+            }.get(elem_type, "movq")
+            if elem_type in ("u32",):
+                lines.append(f"\t{instruction} {offset}(%rbp), %eax")
+            else:
+                lines.append(f"\t{instruction} {offset}(%rbp), %rax")
+        else:
+            emit_load_operand(lines, index, slots, "rcx")
+            if elem_width not in (1, 2, 4, 8):
+                raise CompileError(f"ancho de elemento no soportado: {elem_width}")
+            if elem_width > 1:
+                lines.append(f"\timulq ${elem_width}, %rcx, %rcx")
+            lines.append(f"\tmovq %rbp, %rax")
+            lines.append("\taddq %rcx, %rax")
+            lines.append(f"\taddq ${base_slot}, %rax")
+            lines.extend([
+                f"\tmovq %rbp, %rcx",
+                f"\taddq ${base_slot + elem_width * _count}, %rcx",
+                "\tcmpq %rcx, %rax",
+                f"\tjae {memory_error_label}",
+                "\tcmpq %rbp, %rax",
+                f"\tjb {memory_error_label}",
+            ])
+            instruction = {
+                "u8": "movzbq",
+                "bool": "movzbq",
+                "i8": "movsbq",
+                "u16": "movzwq",
+                "i16": "movswq",
+                "u32": "movl",
+                "i32": "movslq",
+                "u64": "movq",
+                "i64": "movq",
+                "usize": "movq",
+                "isize": "movq",
+            }.get(elem_type, "movq")
+            if elem_type in ("u32",):
+                lines.append(f"\t{instruction} (%rax), %eax")
+            else:
+                lines.append(f"\t{instruction} (%rax), %rax")
         return
     if expression[0] == "call":
         _kind, function_name, arguments, _return_type, external = expression
@@ -1758,6 +1885,66 @@ def emit_function(
                 f"\t{store_instr} {source_reg}, "
                 f"{base_slot + field_offset}(%rbp)"
             )
+        elif statement_kind == "store_array":
+            base_name, index, elem_type, count, elem_width, expression = statement[1:]
+            emit_expression(
+                lines,
+                expression,
+                slots,
+                arithmetic_error_label,
+                memory_error_label,
+                elem_type,
+            )
+            base_slot = slots[base_name]
+            if index[0] == "imm":
+                offset = base_slot + index[1] * elem_width
+                store_instr, source_reg = {
+                    "u8": ("movb", "%al"),
+                    "i8": ("movb", "%al"),
+                    "bool": ("movb", "%al"),
+                    "u16": ("movw", "%ax"),
+                    "i16": ("movw", "%ax"),
+                    "u32": ("movl", "%eax"),
+                    "i32": ("movl", "%eax"),
+                    "u64": ("movq", "%rax"),
+                    "i64": ("movq", "%rax"),
+                    "usize": ("movq", "%rax"),
+                    "isize": ("movq", "%rax"),
+                }.get(elem_type, ("movq", "%rax"))
+                lines.append(
+                    f"\t{store_instr} {source_reg}, {offset}(%rbp)"
+                )
+            else:
+                emit_load_operand(lines, index, slots, "rcx")
+                if elem_width > 1:
+                    lines.append(f"\timulq ${elem_width}, %rcx, %rcx")
+                lines.extend([
+                    f"\tmovq %rbp, %rdx",
+                    "\taddq %rcx, %rdx",
+                    f"\taddq ${base_slot}, %rdx",
+                    f"\tmovq %rbp, %rcx",
+                    f"\taddq ${base_slot + elem_width * count}, %rcx",
+                    "\tcmpq %rcx, %rdx",
+                    f"\tjae {memory_error_label}",
+                    "\tcmpq %rbp, %rdx",
+                    f"\tjb {memory_error_label}",
+                ])
+                store_instr, source_reg = {
+                    "u8": ("movb", "%al"),
+                    "i8": ("movb", "%al"),
+                    "bool": ("movb", "%al"),
+                    "u16": ("movw", "%ax"),
+                    "i16": ("movw", "%ax"),
+                    "u32": ("movl", "%eax"),
+                    "i32": ("movl", "%eax"),
+                    "u64": ("movq", "%rax"),
+                    "i64": ("movq", "%rax"),
+                    "usize": ("movq", "%rax"),
+                    "isize": ("movq", "%rax"),
+                }.get(elem_type, ("movq", "%rax"))
+                lines.append(
+                    f"\t{store_instr} {source_reg}, (%rdx)"
+                )
         elif statement_kind == "if":
             condition, then_statements, else_statements = statement[1:]
             left, comparator, right = condition
