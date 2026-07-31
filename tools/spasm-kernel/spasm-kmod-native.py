@@ -44,6 +44,19 @@ IF_HEAD_RE = re.compile(r"if\s*\(([^()]*)\)\s*\{")
 WHILE_HEAD_RE = re.compile(r"while\s*\(([^()]*)\)\s*\{")
 NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ERRNOS = {"ENOMEM": -12}
+ERRNOS.update({
+    "EINVAL": -22,
+    "ENOSYS": -38,
+    "ENODEV": -19,
+    "EIO": -5,
+    "EBUSY": -16,
+    "ENOENT": -2,
+    "ENOSPC": -28,
+    "ENODATA": -61,
+    "ERANGE": -34,
+    "EFAULT": -14,
+})
+ENUM_VALUES = {}
 INTEGER_TYPES = {
     "u8": (0, 2**8 - 1),
     "i8": (-(2**7), 2**7 - 1),
@@ -92,7 +105,7 @@ STRUCT_HEAD_RE = re.compile(
 )
 FIELD_RE = re.compile(
     r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
-    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)\s*;?\s*$"
+    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?(?:\[[0-9]+\])?\??)\s*;?\s*$"
 )
 DOT_ACCESS_RE = re.compile(
     r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*$"
@@ -131,6 +144,67 @@ KERNEL_EXTERN_ALLOWLIST = {
 
 STRUCT_LAYOUTS = {}
 
+ENUM_HEAD_RE = re.compile(
+    r"\benum\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{"
+)
+ENUM_MEMBER_RE = re.compile(
+    r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(-?[0-9]+)\s*,?\s*$"
+)
+
+
+def format_array_type(type_name, count):
+    return f"{type_name}[{count}]"
+
+
+def parse_array_type(type_name):
+    match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?)\[([0-9]+)\]$", type_name)
+    if not match:
+        return None, None
+    return match.group(1), int(match.group(2))
+
+
+def extract_enums(source):
+    enum_entries = []
+    spans = []
+    position = 0
+    while True:
+        match = ENUM_HEAD_RE.search(source, position)
+        if not match:
+            break
+        name = match.group(1)
+        open_index = match.end() - 1
+        close_index = find_closing_brace(source, open_index)
+        body = source[open_index + 1 : close_index]
+        members = {}
+        next_auto = 0
+        for piece in body.split(","):
+            piece = piece.strip()
+            if not piece:
+                continue
+            member_match = ENUM_MEMBER_RE.match(piece)
+            if not member_match:
+                raise CompileError(
+                    f"miembro invalido en enum {name}: {piece!r}"
+                )
+            member_name, value_text = member_match.groups()
+            value = int(value_text)
+            if member_name in members:
+                raise CompileError(
+                    f"miembro duplicado en enum {name}: {member_name}"
+                )
+            members[member_name] = value
+            ENUM_VALUES[member_name] = (value, name)
+            next_auto = value + 1
+        if not members:
+            raise CompileError(f"enum {name} sin miembros")
+        enum_entries.append((name, members))
+        spans.append((match.start(), close_index + 1))
+        position = close_index + 1
+    remaining = list(source)
+    for start, end in spans:
+        remaining[start:end] = " " * (end - start)
+    return dict(enum_entries), "".join(remaining)
+
 
 def compute_struct_layout(name, fields):
     offset = 0
@@ -155,6 +229,10 @@ def compute_struct_layout(name, fields):
 
 
 def type_size_and_align(type_name):
+    inner_type, count = parse_array_type(type_name)
+    if inner_type is not None:
+        elem_width, elem_align = type_size_and_align(inner_type)
+        return elem_width * count, elem_align
     if type_name in TYPE_WIDTHS:
         w = TYPE_WIDTHS[type_name]
         return w, w
@@ -248,7 +326,9 @@ def asm_string(value):
 def parse_source(source, kind="module"):
     metadata = {}
     STRUCT_LAYOUTS.clear()
+    ENUM_VALUES.clear()
     block_texts, source_without_blocks = extract_on_blocks(source)
+    enums, source_without_blocks = extract_enums(source_without_blocks)
     structs, source_without_blocks = extract_structs(source_without_blocks)
     functions, source_without_blocks = extract_functions(source_without_blocks)
     externs, source_without_blocks = extract_externs(source_without_blocks)
@@ -526,6 +606,9 @@ def pointer_type(type_name):
 
 
 def is_supported_type(type_name):
+    inner_type, _count = parse_array_type(type_name)
+    if inner_type is not None:
+        return is_supported_type(inner_type)
     if type_name in INTEGER_TYPES:
         return True
     if is_struct_type(type_name):
@@ -584,6 +667,10 @@ def parse_operand(value, variables):
     value = value.strip()
     if value.lstrip("-").isdigit():
         return ("imm", int(value))
+    if value in ENUM_VALUES:
+        return ("imm", ENUM_VALUES[value][0])
+    if value in ERRNOS:
+        return ("imm", ERRNOS[value])
     if value not in variables:
         raise CompileError(f"variable no declarada: {value}")
     return ("var", value)
