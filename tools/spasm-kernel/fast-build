@@ -1,0 +1,33 @@
+#!/bin/sh
+# spasm-kernel fast build — solo recompila SpASM y re-linkea vmlinux
+# Uso: tools/spasm-kernel/fast-build [build_dir]
+#   Sin args usa build-spasm-kernel-standard-amd64-step1
+
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+build_dir=${1:-"$kernel_src/../build-spasm-kernel-standard-amd64-step1"}
+spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
+
+cd "$kernel_src"
+
+# 1. Limpiar solo objetos SpASM para forzar recompilacion
+echo "=== Cleaning SpASM objects ===" 
+find "$build_dir/lib" -name "*_spasm.o" -delete 2>/dev/null
+find "$build_dir/lib" -name "*_spasm.spasm.S" -delete 2>/dev/null
+find "$build_dir/lib" -name "*.spasm.S" -delete 2>/dev/null
+rm -f "$build_dir/lib/built-in.a"
+
+echo "=== Building SpASM + vmlinux (no drivers) ==="
+export SPASMC="$spasmc"
+make -C "$kernel_src" O="$build_dir" vmlinux -j$(nproc) 2>&1 | grep -E "SPASM|spasm|vmlinux|Error|error:|Kernel:" 
+
+echo ""
+echo "=== bzImage ==="
+make -C "$kernel_src" O="$build_dir" arch/x86/boot/bzImage -j$(nproc) 2>&1 | grep -E "BUILD|Kernel:|Error|error:"
+
+echo ""
+ls -la "$build_dir/arch/x86/boot/bzImage"
+echo "=== Done. Install with: ==="
+echo "sudo cp $build_dir/arch/x86/boot/bzImage /boot/vmlinuz-6.19.14-spasm0.7"
+echo "sudo make -C $kernel_src O=$build_dir INSTALL_MOD_PATH=/ modules_install  # solo si cambiaron modulos"
