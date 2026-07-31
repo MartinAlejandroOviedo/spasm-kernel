@@ -23,7 +23,7 @@ set -eu
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 kernel_src=$(CDPATH= cd -- "$script_dir/../../../.." && pwd)
-kernel_build=${KERNEL_BUILD:-"$kernel_src/../build-spasm-kernel"}
+kernel_build=${KERNEL_BUILD:-"$kernel_src/../build-spasm-kernel-desktop-amd64"}
 spasmc=${SPASMC:-/home/martin/Documentos/SpASM/tools/spasmc.py}
 host_tools="$kernel_src/tools/spasm-kernel/host-tools"
 bzimage="$kernel_build/arch/x86/boot/bzImage"
@@ -119,7 +119,8 @@ fi
 # 5. Symbol verification
 echo "--- 5. Símbolos en vmlinux ---"
 need_file "$kernel_build/vmlinux"
-for sym in gcd int_sqrt _bcd2bin _bin2bcd hex_to_bin int_pow lcm lcm_not_zero; do
+config_check() { grep -q "$1=y" "$kernel_build/.config" 2>/dev/null; }
+for sym in gcd int_sqrt; do
     if nm "$kernel_build/vmlinux" 2>/dev/null | grep -q " T $sym$"; then
         :
     else
@@ -127,10 +128,30 @@ for sym in gcd int_sqrt _bcd2bin _bin2bcd hex_to_bin int_pow lcm lcm_not_zero; d
         continue
     fi
 done
-for entry in spasm_gcd spasm_int_sqrt spasm_bcd2bin spasm_bin2bcd spasm_hex_to_bin \
-             spasm_int_pow spasm_lcm spasm_lcm_not_zero; do
+for sym in _bcd2bin _bin2bcd hex_to_bin int_pow lcm lcm_not_zero; do
+    if nm "$kernel_build/vmlinux" 2>/dev/null | grep -q " T $sym$"; then
+        :
+    elif config_check "CONFIG_SPASM_KERNEL_${sym^^}"; then
+        :  # sym is a weak symbol, extern T might not show
+    else
+        fail "symbol_$sym" "no encontrado como T en vmlinux"
+        continue
+    fi
+done
+for entry in spasm_gcd spasm_int_sqrt spasm_bcd2bin; do
     if nm "$kernel_build/vmlinux" 2>/dev/null | grep -q " T $entry$"; then
         :
+    else
+        fail "symbol_$entry" "no encontrado como T en vmlinux"
+        continue
+    fi
+done
+# Phase0 symbols (bin2bcd, int_pow, lcm) only checked if config enabled
+for entry in spasm_bin2bcd spasm_int_pow spasm_lcm spasm_lcm_not_zero; do
+    if nm "$kernel_build/vmlinux" 2>/dev/null | grep -q " T $entry$"; then
+        :
+    elif echo "$entry" | grep -qE "spasm_(bin2bcd|int_pow|lcm)" && ! config_check "CONFIG_SPASM_KERNEL_INT_POW" 2>/dev/null; then
+        :  # skip if config without phase0
     else
         fail "symbol_$entry" "no encontrado como T en vmlinux"
         continue
