@@ -149,6 +149,15 @@ KERNEL_EXTERN_ALLOWLIST = {
     "lcm": (("usize", "usize"), "usize"),
     "int_pow": (("u64", "u64"), "u64"),
 }
+ATOMIC_EXPR_RE = re.compile(
+    r"\s*(atomic_load|atomic_xchg|atomic_cmpxchg|atomic_add|atomic_sub)"
+    r"<([A-Za-z_][A-Za-z0-9_]*)>\s*\(\s*"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:,\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*))?"
+    r"(?:\s*,\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*))?\s*\)\s*;?\s*"
+)
+BARRIER_CALL_RE = re.compile(
+    r"\s*(smp_mb|smp_rmb|smp_wmb|barrier)\s*\(\s*\)\s*;?\s*"
+)
 
 STRUCT_LAYOUTS = {}
 
@@ -871,6 +880,26 @@ def parse_value_expression(value, variables, functions, expected_type):
                 f"cargar<{load_type}> no se puede asignar a {expected_type}"
             )
         return ("load", resource_name, offset_text, load_type)
+    atom_match = ATOMIC_EXPR_RE.match(value)
+    if atom_match:
+        op, atom_type, ptr_name, arg1_text, arg2_text = atom_match.groups()
+        if atom_type != expected_type:
+            raise CompileError(
+                f"{op}<{atom_type}> retorna {atom_type}, se esperaba {expected_type}"
+            )
+        if ptr_name not in variables:
+            raise CompileError(f"variable no declarada: {ptr_name}")
+        if variables[ptr_name] != f"ptr<{atom_type}>":
+            raise CompileError(
+                f"{ptr_name} es {variables[ptr_name]}, se esperaba ptr<{atom_type}>"
+            )
+        arg1 = parse_operand(arg1_text, variables) if arg1_text else None
+        arg2 = parse_operand(arg2_text, variables) if arg2_text else None
+        if arg1 and arg1[0] == "imm":
+            validate_immediate(arg1[1], atom_type)
+        if arg2 and arg2[0] == "imm":
+            validate_immediate(arg2[1], atom_type)
+        return ("atomic", op, ptr_name, atom_type, arg1, arg2)
     call_match = CALL_RE.match(value)
     if not call_match:
         if is_fn_type(expected_type):
@@ -1003,6 +1032,7 @@ def parse_statements(
         ("free", FREE_RE),
         ("store", STORE_RE),
         ("array_assign", ARRAY_ASSIGN_RE),
+        ("barrier", BARRIER_CALL_RE),
         ("return", RETURN_RE),
         ("typed_var", TYPED_VAR_RE),
         ("var", VAR_RE),
@@ -1248,6 +1278,8 @@ def parse_statements(
                         expression,
                     )
                 )
+            elif statement_kind == "barrier":
+                statements.append(("barrier", values[0]))
             elif statement_kind == "field_assign":
                 base_name, dot_chain, expression_text = values
                 if base_name not in variables:
@@ -1638,6 +1670,38 @@ def emit_expression(
             emit_load_operand(lines, operand, slots, register)
         symbol = function_name if external else f"spasm_fn_{function_name}"
         lines.append(f"\tcall {symbol}")
+        return
+    if expression[0] == "atomic":
+        _kind, op, ptr_name, atom_type, arg1, arg2 = expression
+        width = type_size_and_align(atom_type)[0]
+        instr = {1: "b", 2: "w", 4: "l", 8: "q"}.get(width, "q")
+        lines.append(f"\tmovq {slots[ptr_name]}(%rbp), %rax")
+        if op == "atomic_load":
+            lines.append(f"\tmov{instr} (%rax), %eax" if width <= 4 else f"\tmovq (%rax), %rax")
+        elif op == "atomic_xchg":
+            emit_load_operand(lines, arg1, slots, "rcx")
+            lines.append(f"\txchg{instr} %ecx, (%rax)" if width <= 4 else f"\txchgq %rcx, (%rax)")
+            lines.append(f"\tmov{instr} %ecx, %eax" if width <= 4 else "\tmovq %rcx, %rax")
+        elif op == "atomic_cmpxchg":
+            emit_load_operand(lines, arg1, slots, "rdx")
+            emit_load_operand(lines, arg2, slots, "rcx")
+            lines.append(f"\tlock cmpxchg{instr} %ecx, (%rax)" if width <= 4 else f"\tlock cmpxchgq %rcx, (%rax)")
+        elif op == "atomic_add":
+            emit_load_operand(lines, arg1, slots, "rcx")
+            if width <= 4:
+                lines.append(f"\tlock add{instr} %ecx, (%rax)")
+                lines.append(f"\tmov{instr} (%rax), %eax")
+            else:
+                lines.append(f"\tlock addq %rcx, (%rax)")
+                lines.append("\tmovq (%rax), %rax")
+        elif op == "atomic_sub":
+            emit_load_operand(lines, arg1, slots, "rcx")
+            if width <= 4:
+                lines.append(f"\tlock sub{instr} %ecx, (%rax)")
+                lines.append(f"\tmov{instr} (%rax), %eax")
+            else:
+                lines.append(f"\tlock subq %rcx, (%rax)")
+                lines.append("\tmovq (%rax), %rax")
         return
     if expression[0] == "indirect_call":
         _kind, var_name, arguments, _return_type, _fn_params = expression
@@ -2034,6 +2098,18 @@ def emit_function(
                 lines.append(
                     f"\t{store_instr} {source_reg}, (%rdx)"
                 )
+        elif statement_kind == "barrier":
+            barrier_kind = statement[1]
+            barrier_insn = {
+                "smp_mb": "mfence",
+                "smp_rmb": "lfence",
+                "smp_wmb": "sfence",
+                "barrier": "",
+            }.get(barrier_kind)
+            if barrier_insn:
+                lines.append(f"\t{barrier_insn}")
+            else:
+                lines.append("\t# compiler barrier")
         elif statement_kind == "if":
             condition, then_statements, else_statements = statement[1:]
             left, comparator, right = condition
