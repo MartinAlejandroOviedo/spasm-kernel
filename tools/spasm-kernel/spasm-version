@@ -1,0 +1,36 @@
+#!/bin/sh
+# Muestra y permite actualizar la version del kernel SpASM
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+kernel_src=$(CDPATH= cd -- "$script_dir/../.." && pwd)
+version_file="$kernel_src/VERSION.spasm"
+
+if [ -f "$version_file" ]; then
+    . "$version_file"
+else
+    SPASM_MAJOR=0; SPASM_MINOR=1; SPASM_PATCH=0
+fi
+
+case "${1:-show}" in
+    show)
+        echo "v${SPASM_MAJOR}.${SPASM_MINOR}.${SPASM_PATCH} (${SPASM_CODENAME:-})"
+        echo "KERNELRELEASE=6.19.14-spasm${SPASM_MAJOR}.${SPASM_MINOR}"
+        ;;
+    bump)
+        new_minor=$((SPASM_MINOR + 1))
+        echo "Bumping: v${SPASM_MAJOR}.${SPASM_MINOR}.${SPASM_PATCH} → v${SPASM_MAJOR}.${new_minor}.0"
+        sed -i "s/SPASM_MINOR=.*/SPASM_MINOR=$new_minor/" "$version_file"
+        sed -i 's/SPASM_PATCH=.*/SPASM_PATCH=0/' "$version_file"
+        ;;
+    release)
+        release="${2:-}"
+        echo "SPASM_MAJOR=${SPASM_MAJOR}" > "$version_file"
+        echo "SPASM_MINOR=${SPASM_MINOR}" >> "$version_file"
+        echo "SPASM_PATCH=${SPASM_PATCH}" >> "$version_file"
+        echo "SPASM_CODENAME=\"${release}\"" >> "$version_file"
+        ;;
+    *)
+        echo "Usage: spasm-version {show|bump|release <name>}"
+        exit 1
+        ;;
+esac

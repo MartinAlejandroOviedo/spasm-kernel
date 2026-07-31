@@ -1,0 +1,5 @@
+# SpASM kernel version — incrementar al migrar funciones
+SPASM_MAJOR=0
+SPASM_MINOR=5
+SPASM_PATCH=0
+SPASM_CODENAME="21-funciones"
