@@ -169,6 +169,10 @@ PTR_OP_RE = re.compile(
     r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:,\s*(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*))?"
     r"\s*\)\s*;?\s*"
 )
+BITOP_RE = re.compile(
+    r"\s*(fls|ffs|__ffs)\s*\(\s*"
+    r"(-?[0-9]+|[A-Za-z_][A-Za-z0-9_]*)\s*\)\s*;?\s*"
+)
 BARRIER_CALL_RE = re.compile(
     r"\s*(smp_mb|smp_rmb|smp_wmb|barrier)\s*\(\s*\)\s*;?\s*"
 )
@@ -958,6 +962,15 @@ def parse_value_expression(value, variables, functions, expected_type):
             )
         elem_width = type_size_and_align(inner_type)[0]
         return ("array_access", base_name, index, inner_type, count, elem_width)
+    bitop_match = BITOP_RE.match(value)
+    if bitop_match:
+        op, operand_text = bitop_match.groups()
+        operand = parse_operand(operand_text, variables, functions)
+        if op != "fls" and op != "ffs" and op != "__ffs":
+            raise CompileError(f"bitop no soportado: {op}")
+        if expected_type != "usize":
+            raise CompileError(f"{op}() retorna usize, se esperaba {expected_type}")
+        return ("bitop", op, operand)
     ptr_match = PTR_OP_RE.match(value)
     if ptr_match:
         op, ptr_type, ptr_name, arg_text = ptr_match.groups()
@@ -1792,6 +1805,29 @@ def emit_expression(
         else:
             symbol = f"spasm_fn_{function_name}"
         lines.append(f"\tcall {symbol}")
+        return
+    if expression[0] == "bitop":
+        _kind, op, operand = expression
+        emit_load_operand(lines, operand, slots, "rax")
+        n = len(lines)
+        if op == "fls":
+            lines.append("\tbsrq %rax, %rax")
+            lines.append(f"\tjnz .Lbitop_ok_{n}")
+            lines.append("\txorl %eax, %eax")
+            lines.append(f"\tjmp .Lbitop_end_{n}")
+            lines.append(f".Lbitop_ok_{n}:")
+            lines.append("\taddq $1, %rax")
+            lines.append(f".Lbitop_end_{n}:")
+        elif op == "__ffs":
+            lines.append("\tbsfq %rax, %rax")
+        elif op == "ffs":
+            lines.append("\tbsfq %rax, %rax")
+            lines.append(f"\tjnz .Lbitop_ok_{n}")
+            lines.append("\txorl %eax, %eax")
+            lines.append(f"\tjmp .Lbitop_end_{n}")
+            lines.append(f".Lbitop_ok_{n}:")
+            lines.append("\taddq $1, %rax")
+            lines.append(f".Lbitop_end_{n}:")
         return
     if expression[0] == "ptr_op":
         _kind, op, ptr_name, ptr_type, arg = expression
