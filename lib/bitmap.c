@@ -425,19 +425,35 @@ unsigned int __bitmap_weight(const unsigned long *bitmap, unsigned int bits)
 EXPORT_SYMBOL(__bitmap_weight);
 #endif
 
-unsigned int __bitmap_weight_and(const unsigned long *bitmap1,
-				const unsigned long *bitmap2, unsigned int bits)
+#ifdef CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_AND_SPASM
+unsigned int __attribute__((weak)) __bitmap_weight_and(const unsigned long *bitmap1, const unsigned long *bitmap2, unsigned int bits)
+#elif defined(CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_AND_DUAL)
+#define __bitmap_weight_and spasm_bitmap_bitmap_weight_and_c
+unsigned int __bitmap_weight_and(const unsigned long *bitmap1, const unsigned long *bitmap2, unsigned int bits)
+#else
+unsigned int __bitmap_weight_and(const unsigned long *bitmap1, const unsigned long *bitmap2, unsigned int bits)
+#endif
 {
 	return BITMAP_WEIGHT(bitmap1[idx] & bitmap2[idx], bits);
 }
+#if !defined(CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_AND_SPASM) && !defined(CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_AND_DUAL)
 EXPORT_SYMBOL(__bitmap_weight_and);
+#endif
 
-unsigned int __bitmap_weight_andnot(const unsigned long *bitmap1,
-				const unsigned long *bitmap2, unsigned int bits)
+#ifdef CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_ANDNOT_SPASM
+unsigned int __attribute__((weak)) __bitmap_weight_andnot(const unsigned long *bitmap1, const unsigned long *bitmap2, unsigned int bits)
+#elif defined(CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_ANDNOT_DUAL)
+#define __bitmap_weight_andnot spasm_bitmap_bitmap_weight_andnot_c
+unsigned int __bitmap_weight_andnot(const unsigned long *bitmap1, const unsigned long *bitmap2, unsigned int bits)
+#else
+unsigned int __bitmap_weight_andnot(const unsigned long *bitmap1, const unsigned long *bitmap2, unsigned int bits)
+#endif
 {
 	return BITMAP_WEIGHT(bitmap1[idx] & ~bitmap2[idx], bits);
 }
+#if !defined(CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_ANDNOT_SPASM) && !defined(CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_ANDNOT_DUAL)
 EXPORT_SYMBOL(__bitmap_weight_andnot);
+#endif
 
 unsigned int __bitmap_weighted_or(unsigned long *dst, const unsigned long *bitmap1,
 				  const unsigned long *bitmap2, unsigned int bits)

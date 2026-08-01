@@ -84,17 +84,35 @@ u32 crc32_le(u32 crc, const void *p, size_t len)
 EXPORT_SYMBOL(crc32_le);
 #endif
 
+#ifdef CONFIG_SPASM_KERNEL_CRC32_BE_SPASM
+u32 __attribute__((weak)) crc32_be(u32 crc, const void *p, size_t len)
+#elif defined(CONFIG_SPASM_KERNEL_CRC32_BE_DUAL)
+#define crc32_be spasm_crc32_be_c
 u32 crc32_be(u32 crc, const void *p, size_t len)
+#else
+u32 crc32_be(u32 crc, const void *p, size_t len)
+#endif
 {
 	return crc32_be_arch(crc, p, len);
 }
+#if !defined(CONFIG_SPASM_KERNEL_CRC32_BE_SPASM) && !defined(CONFIG_SPASM_KERNEL_CRC32_BE_DUAL)
 EXPORT_SYMBOL(crc32_be);
+#endif
 
+#ifdef CONFIG_SPASM_KERNEL_CRC32C_SPASM
+u32 __attribute__((weak)) crc32c(u32 crc, const void *p, size_t len)
+#elif defined(CONFIG_SPASM_KERNEL_CRC32C_DUAL)
+#define crc32c spasm_crc32c_c
 u32 crc32c(u32 crc, const void *p, size_t len)
+#else
+u32 crc32c(u32 crc, const void *p, size_t len)
+#endif
 {
 	return crc32c_arch(crc, p, len);
 }
+#if !defined(CONFIG_SPASM_KERNEL_CRC32C_SPASM) && !defined(CONFIG_SPASM_KERNEL_CRC32C_DUAL)
 EXPORT_SYMBOL(crc32c);
+#endif
 
 #ifdef crc32_mod_init_arch
 static int __init crc32_mod_init(void)
