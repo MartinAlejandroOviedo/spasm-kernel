@@ -69,11 +69,20 @@ EXPORT_SYMBOL(crc32_optimizations);
 #define crc32c_arch crc32c_base
 #endif
 
+#ifdef CONFIG_SPASM_KERNEL_CRC32_LE_SPASM
+u32 __attribute__((weak)) crc32_le(u32 crc, const void *p, size_t len)
+#elif defined(CONFIG_SPASM_KERNEL_CRC32_LE_DUAL)
+#define crc32_le spasm_crc32_le_c
 u32 crc32_le(u32 crc, const void *p, size_t len)
+#else
+u32 crc32_le(u32 crc, const void *p, size_t len)
+#endif
 {
 	return crc32_le_arch(crc, p, len);
 }
+#if !defined(CONFIG_SPASM_KERNEL_CRC32_LE_SPASM) && !defined(CONFIG_SPASM_KERNEL_CRC32_LE_DUAL)
 EXPORT_SYMBOL(crc32_le);
+#endif
 
 u32 crc32_be(u32 crc, const void *p, size_t len)
 {

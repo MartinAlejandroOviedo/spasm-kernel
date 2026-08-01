@@ -8,7 +8,14 @@
  * @ptr: pointer to the start of the area
  * @bytes: the size of the area
  */
+#ifdef CONFIG_SPASM_KERNEL_MEMWEIGHT_SPASM
+size_t __attribute__((weak)) memweight(const void *ptr, size_t bytes)
+#elif defined(CONFIG_SPASM_KERNEL_MEMWEIGHT_DUAL)
+#define memweight spasm_memweight_c
 size_t memweight(const void *ptr, size_t bytes)
+#else
+size_t memweight(const void *ptr, size_t bytes)
+#endif
 {
 	size_t ret = 0;
 	size_t longs;
@@ -36,4 +43,6 @@ size_t memweight(const void *ptr, size_t bytes)
 
 	return ret;
 }
+#if !defined(CONFIG_SPASM_KERNEL_MEMWEIGHT_SPASM) && !defined(CONFIG_SPASM_KERNEL_MEMWEIGHT_DUAL)
 EXPORT_SYMBOL(memweight);
+#endif

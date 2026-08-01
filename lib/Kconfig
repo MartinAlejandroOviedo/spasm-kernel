@@ -1191,3 +1191,39 @@ config SPASM_KERNEL_BSEARCH_DUAL
 	bool "Dual C/SpASM comparison"
 
 endchoice
+
+choice
+	prompt "spasm-kernel memweight implementation"
+	default SPASM_KERNEL_MEMWEIGHT_SPASM if SPASM_KERNEL_MODE_SPASM
+	default SPASM_KERNEL_MEMWEIGHT_DUAL if SPASM_KERNEL_MODE_DUAL
+	default SPASM_KERNEL_MEMWEIGHT_C
+	depends on X86_64
+
+config SPASM_KERNEL_MEMWEIGHT_C
+	bool "Original Linux C implementation"
+
+config SPASM_KERNEL_MEMWEIGHT_SPASM
+	bool "SpASM implementation"
+
+config SPASM_KERNEL_MEMWEIGHT_DUAL
+	bool "Dual C/SpASM comparison"
+
+endchoice
+
+choice
+	prompt "spasm-kernel crc32_le implementation"
+	default SPASM_KERNEL_CRC32_LE_SPASM if SPASM_KERNEL_MODE_SPASM
+	default SPASM_KERNEL_CRC32_LE_DUAL if SPASM_KERNEL_MODE_DUAL
+	default SPASM_KERNEL_CRC32_LE_C
+	depends on X86_64
+
+config SPASM_KERNEL_CRC32_LE_C
+	bool "Original Linux C implementation"
+
+config SPASM_KERNEL_CRC32_LE_SPASM
+	bool "SpASM implementation"
+
+config SPASM_KERNEL_CRC32_LE_DUAL
+	bool "Dual C/SpASM comparison"
+
+endchoice

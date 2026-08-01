@@ -393,3 +393,7 @@ obj-$(CONFIG_SPASM_KERNEL_CRC_T10DIF_SPASM) += crc_t10dif_spasm.o crc_t10dif_spa
 obj-$(CONFIG_SPASM_KERNEL_CRC_T10DIF_DUAL) += crc_t10dif_spasm.o crc_t10dif_dual.o
 obj-$(CONFIG_SPASM_KERNEL_BSEARCH_SPASM) += bsearch_spasm.o bsearch_spasm_entry.o bsearch_export.o
 obj-$(CONFIG_SPASM_KERNEL_BSEARCH_DUAL) += bsearch_spasm.o bsearch_dual.o
+obj-$(CONFIG_SPASM_KERNEL_MEMWEIGHT_SPASM) += memweight_spasm.o memweight_spasm_entry.o memweight_export.o
+obj-$(CONFIG_SPASM_KERNEL_MEMWEIGHT_DUAL) += memweight_spasm.o memweight_dual.o
+obj-$(CONFIG_SPASM_KERNEL_CRC32_LE_SPASM) += crc32_le_spasm.o crc32_le_spasm_entry.o crc32_le_export.o
+obj-$(CONFIG_SPASM_KERNEL_CRC32_LE_DUAL) += crc32_le_spasm.o crc32_le_dual.o
