@@ -397,3 +397,5 @@ obj-$(CONFIG_SPASM_KERNEL_MEMWEIGHT_SPASM) += memweight_spasm.o memweight_spasm_
 obj-$(CONFIG_SPASM_KERNEL_MEMWEIGHT_DUAL) += memweight_spasm.o memweight_dual.o
 obj-$(CONFIG_SPASM_KERNEL_CRC32_LE_SPASM) += crc32_le_spasm.o crc32_le_spasm_entry.o crc32_le_export.o
 obj-$(CONFIG_SPASM_KERNEL_CRC32_LE_DUAL) += crc32_le_spasm.o crc32_le_dual.o
+obj-$(CONFIG_SPASM_KERNEL_SORT_SPASM) += sort_spasm.o sort_spasm_entry.o sort_export.o
+obj-$(CONFIG_SPASM_KERNEL_SORT_DUAL) += sort_spasm.o sort_dual.o

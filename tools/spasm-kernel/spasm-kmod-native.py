@@ -34,7 +34,7 @@ VAR_RE = re.compile(
 TYPED_VAR_RE = re.compile(
     r"(var|let)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
     r"((?:[A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?(?:\[[0-9]+\])?\??)|"
-    r"(?:fn\s*\([^()]*\)\s*->\s*[A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??))"
+    r"(?:fn\s*\([^()]*\)\s*(?:->\s*[A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)?))"
     r"\s*=\s*([^;{}]+)\s*;"
 )
 ASSIGN_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^;{}]+)\s*;")
@@ -110,7 +110,7 @@ EXTERN_FUNCTION_RE = re.compile(
 PARAM_RE = re.compile(
     r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"
     r"((?:[A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)|"
-    r"(?:fn\s*\([^()]*\)\s*->\s*[A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??))\s*$"
+    r"(?:fn\s*\([^()]*\)\s*(?:->\s*[A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)?))\s*$"
 )
 POINTER_TYPE_RE = re.compile(
     r"^ptr<([A-Za-z_][A-Za-z0-9_]*)>(\?)?$"
@@ -180,8 +180,8 @@ BARRIER_CALL_RE = re.compile(
 STRUCT_LAYOUTS = {}
 
 FN_TYPE_RE = re.compile(
-    r"^fn\s*\(([^()]*)\)\s*->\s*"
-    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??)\s*$"
+    r"^fn\s*\(([^()]*)\)\s*(?:->\s*"
+    r"([A-Za-z_][A-Za-z0-9_]*(?:<[A-Za-z_][A-Za-z0-9_]*>)?\??))?\s*$"
 )
 
 INTERNAL_FN_RE = re.compile(
@@ -222,7 +222,7 @@ def fn_type_info(type_name):
             raw = raw.strip()
             if raw:
                 params.append(raw)
-    return tuple(params), return_type
+    return tuple(params), return_type or "usize"
 
 
 def extract_enums(source):
@@ -530,9 +530,9 @@ def smart_split(text, sep=","):
     current = []
     depth = 0
     for char in text:
-        if char in "({[<":
+        if char in "({[":
             depth += 1
-        elif char in ")}]>":
+        elif char in ")}]":
             depth -= 1
         if char == sep and depth == 0:
             parts.append("".join(current))

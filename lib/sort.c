@@ -341,7 +341,9 @@ void sort(void *base, size_t num, size_t size,
 
 	return __sort_r(base, num, size, _CMP_WRAPPER, SWAP_WRAPPER, &w, false);
 }
+#if !defined(CONFIG_SPASM_KERNEL_SORT_SPASM) && !defined(CONFIG_SPASM_KERNEL_SORT_DUAL)
 EXPORT_SYMBOL(sort);
+#endif
 
 void sort_nonatomic(void *base, size_t num, size_t size,
 		    cmp_func_t cmp_func,
