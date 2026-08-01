@@ -65,11 +65,20 @@ crc_t10dif_generic(u16 crc, const u8 *p, size_t len)
 #define crc_t10dif_arch crc_t10dif_generic
 #endif
 
+#ifdef CONFIG_SPASM_KERNEL_CRC_T10DIF_SPASM
+u16 __attribute__((weak)) crc_t10dif_update(u16 crc, const u8 *p, size_t len)
+#elif defined(CONFIG_SPASM_KERNEL_CRC_T10DIF_DUAL)
+#define crc_t10dif_update spasm_crc_t10dif_c
 u16 crc_t10dif_update(u16 crc, const u8 *p, size_t len)
+#else
+u16 crc_t10dif_update(u16 crc, const u8 *p, size_t len)
+#endif
 {
 	return crc_t10dif_arch(crc, p, len);
 }
+#if !defined(CONFIG_SPASM_KERNEL_CRC_T10DIF_SPASM) && !defined(CONFIG_SPASM_KERNEL_CRC_T10DIF_DUAL)
 EXPORT_SYMBOL(crc_t10dif_update);
+#endif
 
 #ifdef crc_t10dif_mod_init_arch
 static int __init crc_t10dif_mod_init(void)
