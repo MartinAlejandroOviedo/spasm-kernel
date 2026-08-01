@@ -1,0 +1,29 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// __bitmap_subset — b1 ⊆ b2
+
+export fn spasm_bitmap_subset(b1: ptr<usize>?, b2: ptr<usize>?, bits: usize) -> usize {
+    var loop: u8 = 1;
+    var k: usize = 0;
+    var lim: usize = bits >> 6;
+    var v1: usize = 0;
+    var v2: usize = 0;
+    var n: usize = 0;
+    while (loop == 1) {
+        if (k == lim) {
+            loop = 0;
+        } else {
+            v1 = ptr_load<usize>(b1);
+            v2 = ptr_load<usize>(b2);
+            n = v2 ^ -1;
+            n = n & v1;
+            if (n != 0) {
+                return 0;
+            }
+            b1 = ptr_offset<usize>(b1, 8);
+            b2 = ptr_offset<usize>(b2, 8);
+            k = k + 1;
+        }
+    }
+    return 1;
+}

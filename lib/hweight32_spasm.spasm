@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// __sw_hweight32 — Hamming weight for 32-bit values.
+
+export fn spasm_hweight32(w: usize) -> usize {
+    var t: usize = w >> 1;
+    t = t & 1431655765;
+    var res: usize = w - t;
+    t = res & 858993459;
+    res = res >> 2;
+    res = res & 858993459;
+    res = res + t;
+    t = res >> 4;
+    res = res + t;
+    res = res & 252645135;
+    t = res >> 8;
+    res = res + t;
+    t = res >> 16;
+    res = res + t;
+    res = res & 63;
+    return res;
+}

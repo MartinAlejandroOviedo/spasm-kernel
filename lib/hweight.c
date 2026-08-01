@@ -19,7 +19,14 @@
  */
 
 #ifndef CONFIG_SPASM_KERNEL_HWEIGHT8_SPASM
+#ifdef CONFIG_SPASM_KERNEL_HWEIGHT32_SPASM
+unsigned int __attribute__((weak)) __sw_hweight32(unsigned int w)
+#elif defined(CONFIG_SPASM_KERNEL_HWEIGHT32_DUAL)
+#define __sw_hweight32 spasm_hweight32_c
 unsigned int __sw_hweight32(unsigned int w)
+#else
+unsigned int __sw_hweight32(unsigned int w)
+#endif
 {
 #ifdef CONFIG_ARCH_HAS_FAST_MULTIPLIER
 	w -= (w >> 1) & 0x55555555;
@@ -34,7 +41,9 @@ unsigned int __sw_hweight32(unsigned int w)
 	return (res + (res >> 16)) & 0x000000FF;
 #endif
 }
+#if !defined(CONFIG_SPASM_KERNEL_HWEIGHT32_SPASM) && !defined(CONFIG_SPASM_KERNEL_HWEIGHT32_DUAL)
 EXPORT_SYMBOL(__sw_hweight32);
+#endif
 
 #ifndef CONFIG_SPASM_KERNEL_HWEIGHT16_SPASM
 unsigned int __sw_hweight16(unsigned int w)
@@ -61,7 +70,14 @@ unsigned int __sw_hweight8(unsigned int w)
 EXPORT_SYMBOL(__sw_hweight8);
 #endif
 
+#ifdef CONFIG_SPASM_KERNEL_HWEIGHT64_SPASM
+unsigned long __attribute__((weak)) __sw_hweight64(__u64 w)
+#elif defined(CONFIG_SPASM_KERNEL_HWEIGHT64_DUAL)
+#define __sw_hweight64 spasm_hweight64_c
 unsigned long __sw_hweight64(__u64 w)
+#else
+unsigned long __sw_hweight64(__u64 w)
+#endif
 {
 #if BITS_PER_LONG == 32
 	return __sw_hweight32((unsigned int)(w >> 32)) +
@@ -82,4 +98,6 @@ unsigned long __sw_hweight64(__u64 w)
 #endif
 #endif
 }
+#if !defined(CONFIG_SPASM_KERNEL_HWEIGHT64_SPASM) && !defined(CONFIG_SPASM_KERNEL_HWEIGHT64_DUAL)
 EXPORT_SYMBOL(__sw_hweight64);
+#endif

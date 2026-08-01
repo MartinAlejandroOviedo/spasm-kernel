@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// __bitmap_complement — dst[k] = ~src[k]
+
+export fn spasm_bitmap_complement(dst: ptr<usize>, src: ptr<usize>?, bits: usize) -> usize {
+    var loop: u8 = 1;
+    var k: usize = 0;
+    var lim: usize = bits >> 6;
+    var v1: usize = 0;
+    var v2: usize = 0;
+    var v: usize = 0;
+    while (loop == 1) {
+        if (k == lim) {
+            loop = 0;
+        } else {
+            v1 = ptr_load<usize>(src);
+            v = v1 ^ -1;
+            ptr_store<usize>(dst, v);
+            src = ptr_offset<usize>(src, 8);
+            dst = ptr_offset<usize>(dst, 8);
+            k = k + 1;
+        }
+    }
+    return 0;
+}

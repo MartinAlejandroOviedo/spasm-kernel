@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// __bitmap_xor — dst[k] = b1[k] ^ b2[k]
+
+export fn spasm_bitmap_xor(dst: ptr<usize>, b1: ptr<usize>?, b2: ptr<usize>?, bits: usize) -> usize {
+    var loop: u8 = 1;
+    var k: usize = 0;
+    var lim: usize = bits >> 6;
+    var v1: usize = 0;
+    var v2: usize = 0;
+    var v: usize = 0;
+    while (loop == 1) {
+        if (k == lim) {
+            loop = 0;
+        } else {
+            v1 = ptr_load<usize>(b1);
+            v2 = ptr_load<usize>(b2);
+            v = v1 ^ v2;
+            ptr_store<usize>(dst, v);
+            b1 = ptr_offset<usize>(b1, 8);
+            b2 = ptr_offset<usize>(b2, 8);
+            dst = ptr_offset<usize>(dst, 8);
+            k = k + 1;
+        }
+    }
+    return 0;
+}
