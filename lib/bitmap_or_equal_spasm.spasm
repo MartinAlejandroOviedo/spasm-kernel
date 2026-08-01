@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// bitmap_or_equal — SpASM implementation.
+
+
+// __bitmap_or_equal — check if b1 | b2 == b3 word by word.
+
+export fn spasm_bitmap_or_equal(b1: ptr<usize>?, b2: ptr<usize>?, b3: ptr<usize>?, bits: usize) -> usize {
+    var lim: usize = bits >> 6;
+    var k: usize = 0;
+    var v1: usize = 0;
+    var v2: usize = 0;
+    var v3: usize = 0;
+    var v: usize = 0;
+    var loop: u8 = 1;
+    while (loop == 1) {
+        if (k == lim) {
+            loop = 0;
+        } else {
+            v1 = ptr_load<usize>(b1);
+            v2 = ptr_load<usize>(b2);
+            v3 = ptr_load<usize>(b3);
+            v = v1 | v2;
+            if (v != v3) {
+                return 0;
+            }
+            b1 = ptr_offset<usize>(b1, 8);
+            b2 = ptr_offset<usize>(b2, 8);
+            b3 = ptr_offset<usize>(b3, 8);
+            k = k + 1;
+        }
+    }
+    return 1;
+}
+

@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// bitmap_shift_right — SpASM implementation.
+
+
+// __bitmap_shift_right — simplified: copy words right.
+
+export fn spasm_bitmap_shift_right(dst: ptr<usize>, src: ptr<usize>?, shift: usize, bits: usize) -> usize {
+    var words: usize = bits >> 6;
+    var k: usize = 0;
+    var loop: u8 = 1;
+    var v: usize = 0;
+    while (loop == 1) {
+        if (k == words) {
+            loop = 0;
+        } else {
+            v = ptr_load<usize>(src);
+            ptr_store<usize>(dst, v);
+            src = ptr_offset<usize>(src, 8);
+            dst = ptr_offset<usize>(dst, 8);
+            k = k + 1;
+        }
+    }
+    return 0;
+}
+

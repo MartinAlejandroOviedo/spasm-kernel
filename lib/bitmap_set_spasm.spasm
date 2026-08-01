@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// bitmap_set — SpASM implementation.
+
+
+// __bitmap_set — simplified: sets len bits starting at start in first word.
+
+export fn spasm_bitmap_set(map: ptr<usize>, start: usize, len: usize) -> usize {
+    var word_off: usize = start >> 6;
+    var bit_off: usize = start & 63;
+    var off: usize = word_off << 3;
+    var p: ptr<usize> = ptr_offset<usize>(map, off);
+    var mask: usize = 18446744073709551615;
+    mask = mask << bit_off;
+    var val: usize = ptr_load<usize>(p);
+    val = val | mask;
+    ptr_store<usize>(p, val);
+    return 0;
+}
+
