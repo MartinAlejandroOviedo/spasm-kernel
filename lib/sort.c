@@ -307,7 +307,9 @@ void sort_r(void *base, size_t num, size_t size,
 {
 	__sort_r(base, num, size, cmp_func, swap_func, priv, false);
 }
+#if !defined(CONFIG_SPASM_KERNEL_SORT_R_SPASM) && !defined(CONFIG_SPASM_KERNEL_SORT_R_DUAL)
 EXPORT_SYMBOL(sort_r);
+#endif
 
 /**
  * sort_r_nonatomic - sort an array of elements, with cond_resched
