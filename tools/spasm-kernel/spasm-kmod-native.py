@@ -214,7 +214,7 @@ def fn_type_info(type_name):
     params_text, return_type = match.groups()
     params = []
     if params_text.strip():
-        for raw in params_text.split(","):
+        for raw in smart_split(params_text):
             raw = raw.strip()
             if raw:
                 params.append(raw)
@@ -277,7 +277,7 @@ def extract_static_data(source):
             raise CompileError(f"dato estatico duplicado: {name}")
         if not is_supported_type(elem_type):
             raise CompileError(f"tipo no soportado en static {name}: {elem_type}")
-        raw_values = [v.strip() for v in values_text.split(",") if v.strip()]
+        raw_values = [v.strip() for v in smart_split(values_text) if v.strip()]
         count = int(count_text)
         values = []
         for raw in raw_values:
@@ -454,6 +454,7 @@ def parse_source(source, kind="module"):
                 type_name not in ABI_V2_EXPORTED_TYPES
                 and not is_pointer_type(type_name)
                 and not is_struct_type(type_name)
+                and not is_fn_type(type_name)
             ):
                 raise CompileError(
                     f"export fn {function['name']}: {type_name} "
@@ -520,6 +521,25 @@ def parse_source(source, kind="module"):
     )
 
 
+def smart_split(text, sep=","):
+    parts = []
+    current = []
+    depth = 0
+    for char in text:
+        if char in "({[<":
+            depth += 1
+        elif char in ")}]>":
+            depth -= 1
+        if char == sep and depth == 0:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+    if current:
+        parts.append("".join(current))
+    return parts
+
+
 def find_closing_brace(text, open_index):
     depth = 0
     in_string = False
@@ -582,7 +602,7 @@ def extract_functions(source):
         params = []
         param_names = set()
         if params_text.strip():
-            for raw_param in params_text.split(","):
+            for raw_param in smart_split(params_text):
                 param_match = PARAM_RE.match(raw_param)
                 if not param_match:
                     raise CompileError(
@@ -846,6 +866,13 @@ def validate_expression_type(expression, variable_types, expected_type):
             validate_immediate(value, expected_type)
         elif variable_types[value] != expected_type:
             actual = variable_types[value]
+            # Allow non-nullable → nullable pointer assignment
+            if is_nullable_pointer(expected_type) and actual == expected_type.rstrip("?"):
+                continue
+            # Allow nullable → non-nullable pointer (value may be null-checked first)
+            if is_nullable_pointer(actual) and actual.rstrip("?") == expected_type:
+                continue
+            # Allow integer widening
             if actual in INTEGER_TYPES and expected_type in INTEGER_TYPES:
                 actual_w = TYPE_WIDTHS.get(actual, 0)
                 expected_w = TYPE_WIDTHS.get(expected_type, 0)
@@ -1000,7 +1027,7 @@ def parse_value_expression(value, variables, functions, expected_type):
                     f"retorno de {function_name} es {fn_ret}, "
                     f"se esperaba {expected_type}"
                 )
-            raw_args = [] if not args_text.strip() else args_text.split(",")
+            raw_args = [] if not args_text.strip() else smart_split(args_text)
             if len(raw_args) != len(fn_params):
                 raise CompileError(
                     f"funcion {function_name}: se esperaban "

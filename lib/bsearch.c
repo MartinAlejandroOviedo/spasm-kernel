@@ -28,9 +28,18 @@
  * the key and elements in the array are of the same type, you can use
  * the same comparison function for both sort() and bsearch().
  */
+#ifdef CONFIG_SPASM_KERNEL_BSEARCH_SPASM
+void __attribute__((weak)) *bsearch(const void *key, const void *base, size_t num, size_t size, cmp_func_t cmp)
+#elif defined(CONFIG_SPASM_KERNEL_BSEARCH_DUAL)
+#define bsearch spasm_bsearch_c
 void *bsearch(const void *key, const void *base, size_t num, size_t size, cmp_func_t cmp)
+#else
+void *bsearch(const void *key, const void *base, size_t num, size_t size, cmp_func_t cmp)
+#endif
 {
 	return __inline_bsearch(key, base, num, size, cmp);
 }
+#if !defined(CONFIG_SPASM_KERNEL_BSEARCH_SPASM) && !defined(CONFIG_SPASM_KERNEL_BSEARCH_DUAL)
 EXPORT_SYMBOL(bsearch);
+#endif
 NOKPROBE_SYMBOL(bsearch);

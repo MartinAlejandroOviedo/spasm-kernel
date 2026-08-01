@@ -391,3 +391,5 @@ obj-$(CONFIG_SPASM_KERNEL_CRC64_NVME_SPASM) += crc64_nvme_spasm.o crc64_nvme_spa
 obj-$(CONFIG_SPASM_KERNEL_CRC64_NVME_DUAL) += crc64_nvme_spasm.o crc64_nvme_dual.o
 obj-$(CONFIG_SPASM_KERNEL_CRC_T10DIF_SPASM) += crc_t10dif_spasm.o crc_t10dif_spasm_entry.o crc_t10dif_export.o
 obj-$(CONFIG_SPASM_KERNEL_CRC_T10DIF_DUAL) += crc_t10dif_spasm.o crc_t10dif_dual.o
+obj-$(CONFIG_SPASM_KERNEL_BSEARCH_SPASM) += bsearch_spasm.o bsearch_spasm_entry.o bsearch_export.o
+obj-$(CONFIG_SPASM_KERNEL_BSEARCH_DUAL) += bsearch_spasm.o bsearch_dual.o
