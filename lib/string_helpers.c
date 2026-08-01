@@ -867,7 +867,14 @@ EXPORT_SYMBOL(skip_spaces);
  * in the given string @s. Returns a pointer to the first non-whitespace
  * character in @s.
  */
+#ifdef CONFIG_SPASM_KERNEL_STRIM_SPASM
+char __attribute__((weak)) *strim(char *s)
+#elif defined(CONFIG_SPASM_KERNEL_STRIM_DUAL)
+#define strim spasm_strim_c
 char *strim(char *s)
+#else
+char *strim(char *s)
+#endif
 {
 	size_t size;
 	char *end;
@@ -883,7 +890,9 @@ char *strim(char *s)
 
 	return skip_spaces(s);
 }
+#if !defined(CONFIG_SPASM_KERNEL_STRIM_SPASM) && !defined(CONFIG_SPASM_KERNEL_STRIM_DUAL)
 EXPORT_SYMBOL(strim);
+#endif
 
 /**
  * sysfs_streq - return true if strings are equal, modulo trailing newline

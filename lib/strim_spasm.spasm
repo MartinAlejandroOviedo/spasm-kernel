@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// strim — trim leading and trailing whitespace from string.
+// Uses inline strlen + isspace. Returns pointer to first non-space char.
+
+fn spasm_strlen_local(s: ptr<u8>?) -> usize {
+    var n: usize = 0;
+    var c: u8 = 0;
+    var loop: u8 = 1;
+    while (loop == 1) {
+        c = ptr_load<u8>(s);
+        if (c == 0) {
+            loop = 0;
+        } else {
+            s = ptr_offset<u8>(s, 1);
+            n = n + 1;
+        }
+    }
+    return n;
+}
+
+fn is_sp(c: u8) -> u8 {
+    if (c == 32) { return 1; }
+    if (c == 9) { return 1; }
+    if (c == 10) { return 1; }
+    if (c == 13) { return 1; }
+    return 0;
+}
+
+export fn spasm_strim(s: ptr<u8>?) -> ptr<u8>? {
+    var len: usize = spasm_strlen_local(s);
+    if (len == 0) {
+        return s;
+    }
+    var end: usize = len - 1;
+    var p: ptr<u8> = ptr_offset<u8>(s, end);
+    var c: u8 = 0;
+    var sp: u8 = 0;
+    var loop: u8 = 1;
+    while (loop == 1) {
+        c = ptr_load<u8>(p);
+        sp = is_sp(c);
+        if (sp == 0) {
+            loop = 0;
+        } else {
+            if (end == 0) {
+                loop = 0;
+            } else {
+                end = end - 1;
+                p = ptr_offset<u8>(s, end);
+            }
+        }
+    }
+    end = end + 1;
+    p = ptr_offset<u8>(s, end);
+    ptr_store<u8>(p, 0);
+    c = ptr_load<u8>(s);
+    loop = 1;
+    while (loop == 1) {
+        sp = is_sp(c);
+        if (sp == 0) {
+            loop = 0;
+        } else {
+            s = ptr_offset<u8>(s, 1);
+            c = ptr_load<u8>(s);
+        }
+    }
+    return s;
+}

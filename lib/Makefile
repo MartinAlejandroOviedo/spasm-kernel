@@ -409,3 +409,5 @@ obj-$(CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_ANDNOT_SPASM) += bitmap_weight_andnot_sp
 obj-$(CONFIG_SPASM_KERNEL_BITMAP_WEIGHT_ANDNOT_DUAL) += bitmap_weight_andnot_spasm.o bitmap_weight_andnot_dual.o
 obj-$(CONFIG_SPASM_KERNEL_SORT_R_SPASM) += sort_r_spasm.o sort_r_spasm_entry.o sort_r_export.o
 obj-$(CONFIG_SPASM_KERNEL_SORT_R_DUAL) += sort_r_spasm.o sort_r_dual.o
+obj-$(CONFIG_SPASM_KERNEL_STRIM_SPASM) += strim_spasm.o strim_spasm_entry.o strim_export.o
+obj-$(CONFIG_SPASM_KERNEL_STRIM_DUAL) += strim_spasm.o strim_dual.o
